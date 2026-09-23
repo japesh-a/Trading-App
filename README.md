@@ -2,6 +2,9 @@
 
 Wicklume is a local prototype for learning chart reading through short lessons and synthetic practice challenges. [How to contribute](CONTRIBUTING.md).
 
+**Open the website:** https://japesh-a.github.io/Trading-App/  
+**Share feedback or comments:** https://github.com/japesh-a/Trading-App/issues
+
 Run with Node.js 24 or newer:
 
 ```powershell
