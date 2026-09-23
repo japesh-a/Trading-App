@@ -1,0 +1,8 @@
+data/
+*.log
+node_modules/
+.env
+.env.*
+!.env.example
+/Trading App/
+dist/
