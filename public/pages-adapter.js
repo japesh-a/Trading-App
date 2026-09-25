@@ -24,7 +24,7 @@
 
   window.fetch = async (input, options = {}) => {
     const url = new URL(typeof input === 'string' ? input : input.url, location.href);
-    if (!url.pathname.startsWith('/api/')) return originalFetch(input, options);
+    if (url.origin !== location.origin || !url.pathname.startsWith('/api/')) return originalFetch(input, options);
     const data = await content;
     const state = progress();
     if (url.pathname === '/api/progress') return reply(state);

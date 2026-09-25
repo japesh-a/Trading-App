@@ -1,23 +1,31 @@
 # Wicklume
 
-Wicklume is a local prototype for learning chart reading through short lessons and synthetic practice challenges. [How to contribute](CONTRIBUTING.md).
+An interactive trading education workspace. [Open the website](https://japesh-a.github.io/Trading-App/) or [report an issue](https://github.com/japesh-a/Trading-App/issues).
 
-**Open the website:** https://japesh-a.github.io/Trading-App/  
-**Share feedback or comments:** https://github.com/japesh-a/Trading-App/issues
+The learning path has 18 open lessons, 54 topic-specific diagrams, worked examples, and 180 questions. The trading workspace adds a previous-day BTC chart challenge, drawing and annotation tools, draggable stop and target levels, 24-hour bar-by-bar replay, simulated P/L, a trade journal, and a gated paper account for BTC, US500, gold, and GBP/USD. The journal shows the last ten trades and whole-history statistics and can export a CSV.
 
-Run with Node.js 24 or newer:
+## Run locally
+
+Use Node.js 24 or newer; no package installation is needed.
 
 ```powershell
-cd C:\Users\44775\Trading-App
 npm.cmd run dev
 ```
 
-Open http://localhost:5173 alongside your editor. The development command watches the frontend, server and curriculum and reloads the browser after changes.
+Open `http://localhost:5173`. The optional server stores authenticated learning progress, verified daily results, paper positions, and leaderboards in `data/wicklume.db`. Anonymous browser sessions are device-specific. Set `WICKLUME_DATA_DIR`, `WICKLUME_DB`, or `WICKLUME_PORT` to change storage or port. A hosted server can use `PORT` and `WICKLUME_HOST=0.0.0.0`; its SQLite database needs persistent storage.
 
-Eighteen detailed lessons with three illustrated teaching slides, worked examples and ten questions each. Each lesson has its own chart or diagram, with 54 slide-specific visual states. The app also has three synthetic chart challenges, server-assessed answers, local SQLite progress, XP and milestones. The app uses a single local learner profile, not production accounts. No package installation is needed. Progress is stored in data/wicklume.db.
+For the AI trade review, set **both** `OPENAI_API_KEY` and `OPENAI_MODEL` on the server. The key never belongs in a browser file. For connected US500, gold and GBP/USD quotes, set `TWELVE_DATA_API_KEY`; `TWELVE_DATA_US500_SYMBOL` can override the index symbol. BTC history and quotes use Coinbase. For a separate web frontend, set `WICKLUME_ALLOWED_ORIGIN` on the server to the frontend origin and set `apiBase` in `public/runtime-config.json` to the server's HTTPS origin. The default GitHub Pages build has an empty `apiBase`, so online AI and shared rankings are not connected there.
 
-Lesson explanations live in `lesson-content.mjs` and `lesson-notes.mjs`. Questions live in `question-bank.json`; diagrams live in `public/lesson-visuals.js`. The examples use invented prices. References include [CME's candlestick guide](https://www.cmegroup.com/education/courses/technical-analysis/chart-types-candlestick-line-bar), [CME's support and resistance guide](https://www.cmegroup.com/education/courses/technical-analysis/support-and-resistance), and the [SEC's guide to order types](https://www.investor.gov/introduction-investing/general-resources/news-alerts/alerts-bulletins/investor-bulletins-14).
+When market data is unavailable, the browser can show an explicitly labeled synthetic training feed. Those trades are local practice records and never enter verified rankings. Connected paper positions use server-managed fills; the simulation excludes spread, fees, financing, leverage, and margin. Within a replay candle, a stop is counted first if both stop and target are touched. Paper reconciliation is approximate across connection gaps.
 
-Run `npm test` to check the full lesson path and challenge API. The automated GitHub check runs this on every push and pull request.
+## Build and test
 
-The [GitHub repository](https://github.com/japesh-a/Trading-App) shares the source and hosts comments, Issues and Pull Requests. Pushing a change to `main` runs the tests and publishes the browser version to GitHub Pages. On GitHub Pages, each visitor's progress is saved in their own browser's local storage. It will not sync across devices; the local Node version continues to use SQLite.
+```powershell
+npm.cmd test
+npm.cmd run build:pages
+npm.cmd run preview:pages
+```
+
+The Pages preview opens at `http://127.0.0.1:5188`. Pushing `main` runs the repository checks and publishes `dist/` to GitHub Pages. Pages stores lesson progress and the journal in each visitor's browser; it cannot run the SQLite service. Use the local server or deploy the Node service to activate shared results and AI feedback.
+
+Lesson content lives in `lesson-content.mjs`, `lesson-notes.mjs`, and `question-bank.json`; diagrams live in `public/lesson-visuals.js`. The lesson diagrams use illustrative prices. Background references include [CME's candlestick guide](https://www.cmegroup.com/education/courses/technical-analysis/chart-types-candlestick-line-bar), [CME's support and resistance guide](https://www.cmegroup.com/education/courses/technical-analysis/support-and-resistance), and the [SEC's order types guide](https://www.investor.gov/introduction-investing/general-resources/news-alerts/alerts-bulletins/investor-bulletins-14).

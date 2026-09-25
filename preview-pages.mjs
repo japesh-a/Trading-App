@@ -1,15 +1,12 @@
 import http from 'node:http';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const root = fileURLToPath(new URL('./dist/', import.meta.url));
-const files = new Map([
-  ['/', 'index.html'], ['/index.html', 'index.html'], ['/app.js', 'app.js'],
-  ['/lesson-visuals.js', 'lesson-visuals.js'],
-  ['/style.css', 'style.css'], ['/pages-adapter.js', 'pages-adapter.js'],
-  ['/site-data.json', 'site-data.json']
-]);
+const files = new Map([['/', 'index.html'], ...readdirSync(root)
+  .filter(file => /\.(html|js|css|json)$/.test(file))
+  .map(file => ['/' + file, file])]);
 http.createServer((request, response) => {
   const file = files.get(new URL(request.url, 'http://localhost').pathname);
   if (!file) { response.writeHead(404); response.end('Not found'); return; }
