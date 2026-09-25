@@ -1,3 +1,5 @@
+import { TIMEFRAMES, aggregateCandles } from './timeframes.js';
+
 const DAY=86400;
 let runtime;
 export async function serviceConfig(){
@@ -32,6 +34,16 @@ export async function coinbaseCandles(start,end,granularity=900){
   const rows=await r.json();if(!Array.isArray(rows))throw Error('Invalid market data');
   return rows.map(([time,low,high,open,close,volume])=>({time,open,high,low,close,volume})).filter(c=>c.time>=start&&c.time<end&&[c.open,c.high,c.low,c.close].every(Number.isFinite)).sort((a,b)=>a.time-b.time);
 }
+export async function coinbaseChartCandles(timeframe,now=Date.now()){
+  const seconds=TIMEFRAMES[timeframe];
+  if(!seconds)throw Error('Unsupported chart timeframe.');
+  const granularity=timeframe==='4h'?3600:seconds;
+  const count=timeframe==='4h'?240:180;
+  const current=Math.floor(now/1000),start=Math.floor(current/granularity)*granularity-(count-1)*granularity;
+  const candles=await coinbaseCandles(start,current+1,granularity);
+  if(candles.length<2)throw Error('The selected BTC timeframe is unavailable.');
+  return timeframe==='4h'?aggregateCandles(candles,seconds):candles;
+}
 export async function previousDayChallenge(now=Date.now(),allowDemo=true){
   const day=utcDay(now),end=Date.parse(day+'T00:00:00Z')/1000,start=end-DAY;
   let candles,source='Coinbase · historical BTC/USD',demo=false;
@@ -44,6 +56,17 @@ export async function loadDaily(){
   if(config.apiBase){try{return await requestService('/challenge');}catch(error){const value=await previousDayChallenge();return{...value,serviceError:error.message,ranked:false};}}
   return{...await previousDayChallenge(),ranked:false};
 }
+export async function loadDailyContext(challenge){
+  const end=challenge.history[0].time,start=end-240*3600;
+  if(challenge.demo){
+    const sample=demoCandles('BTC',start,240,3600,challenge.day+'-context');
+    const factor=challenge.history[0].open/sample.at(-1).close;
+    return sample.map(c=>({time:c.time,open:c.open*factor,high:c.high*factor,low:c.low*factor,close:c.close*factor,volume:c.volume}));
+  }
+  const candles=await coinbaseCandles(start,end,3600);
+  if(candles.length<24)throw Error('Earlier BTC context is unavailable.');
+  return candles;
+}
 export async function loadPaperMarket(symbol){
   const config=await serviceConfig();
   if(config.apiBase){try{return {...await requestService('/market?symbol='+encodeURIComponent(symbol)),connected:true};}catch(error){if(symbol!=='BTC')return demoMarket(symbol,error.message);}}
@@ -52,8 +75,17 @@ export async function loadPaperMarket(symbol){
   }
   return demoMarket(symbol,'A market-data connection is needed for this instrument.');
 }
+export async function loadPaperTimeframe(symbol,timeframe,market){
+  if(!TIMEFRAMES[timeframe])throw Error('Unsupported chart timeframe.');
+  if(timeframe==='1m')return market.candles.slice(-180);
+  if(market.demo)return aggregateCandles(market.candles,TIMEFRAMES[timeframe]).slice(-180);
+  if(market.connected){const value=await requestService('/market?symbol='+encodeURIComponent(symbol)+'&timeframe='+encodeURIComponent(timeframe));return value.candles;}
+  if(symbol==='BTC')return coinbaseChartCandles(timeframe);
+  throw Error('This chart timeframe needs a connected market-data provider.');
+}
 export function demoMarket(symbol,message=''){
-  const now=Math.floor(Date.now()/60000)*60;const candles=demoCandles(symbol,now-119*60,120,60,utcDay());
+  const now=Math.floor(Date.now()/60000)*60,count=30*24*60;
+  const candles=demoCandles(symbol,now-(count-1)*60,count,60,utcDay());
   return{candles,price:candles.at(-1).close,time:now,source:'Synthetic training feed',demo:true,interval:60,message};
 }
 export async function btcQuote(){

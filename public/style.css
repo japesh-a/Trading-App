@@ -225,6 +225,12 @@ label, .form-field { display: block; }
 .chart-tools button.active, .chart-tools button[aria-pressed='true'] { border-color: #4fd1b547; color: var(--green); background: #4fd1b50c; }
 .chart-toolbar select { width: auto; border-color: #32455b; background: #152234; }
 .chart-toolbar > input { width: 145px !important; max-width: 100%; min-height: 28px; padding: 5px 8px !important; font-size: 10px; }
+.timeframe-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 7px 14px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: #101a29; }
+.timeframe-tabs { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.timeframe-tabs button { min-width: 35px; min-height: 28px; padding: 4px 8px; border: 1px solid transparent; border-radius: 5px; color: var(--muted); background: transparent; font-size: 10px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.timeframe-tabs button:hover { color: var(--text); background: #203046; }
+.timeframe-tabs button.active { border-color: #4fd1b547; color: var(--green); background: #4fd1b512; }
+#timeframe-note { color: var(--subtle); font-size: 10px; }
 .terminal-head > div > span, .terminal-head > span:not(.status-pill) { color: var(--subtle); font-size: 10px; }
 .chart-area { position: relative; width: 100%; height: 445px; background: #0e1726; overflow: hidden; touch-action: pan-y; }
 .chart-area canvas, .chart-area > svg { display: block; }

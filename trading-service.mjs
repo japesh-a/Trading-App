@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { lessons, publicLessons, correctIndex } from './curriculum.mjs';
-import { previousDayChallenge, coinbaseCandles, utcDay } from './public/market-data.js';
+import { previousDayChallenge, coinbaseCandles, coinbaseChartCandles, utcDay } from './public/market-data.js';
+import { TIMEFRAMES } from './public/timeframes.js';
 import { INITIAL_BALANCE, INSTRUMENTS, openTrade, advanceTrade, closeTrade, cancelPendingTrade, markToMarket, summarizeTrades } from './public/trade-engine.js';
 
 class ServiceError extends Error {
@@ -47,7 +48,7 @@ export function createTradingService(db, options = {}) {
   const clock = options.clock ?? Date.now;
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const allowedOrigins = new Set(String(env.WICKLUME_ALLOWED_ORIGIN || 'https://japesh-a.github.io').split(',').map(value => value.trim()).filter(Boolean));
-  const rates = new Map(), locks = new Map(), challengeRequests = new Map(), quoteCache = new Map(), marketCache = new Map();
+  const rates = new Map(), locks = new Map(), challengeRequests = new Map(), quoteCache = new Map(), marketCache = new Map(), chartCache = new Map();
   const rateLimit = (key, maximum, windowMs = 60000) => {
     const now = clock();
     if (rates.size > 5000) for (const [id, item] of rates) if (item.reset <= now) rates.delete(id);
@@ -158,14 +159,16 @@ export function createTradingService(db, options = {}) {
     quoteCache.set(symbol, { fetched: clock(), value });
     return value;
   };
-  const defaultMarketProvider = async symbol => {
+  const defaultMarketProvider = async (symbol, timeframe = '1m') => {
     if (symbol === 'BTC') {
       const now = Math.floor(clock() / 1000);
-      const [candles, quote] = await Promise.all([coinbaseCandles(now - 299 * 60, now, 60), getQuote(symbol)]);
-      return { candles, ...quote, interval: 60 };
+      const [candles, quote] = await Promise.all([timeframe === '1m'
+        ? coinbaseCandles(now - 299 * 60, now, 60) : coinbaseChartCandles(timeframe, clock()), getQuote(symbol)]);
+      return { candles, ...quote, interval: TIMEFRAMES[timeframe] };
     }
+    const interval = { '1m': '1min', '5m': '5min', '15m': '15min', '1h': '1h', '4h': '4h', '1d': '1day' }[timeframe];
     const [value, quote] = await Promise.all([
-      providerJson(twelveUrl('time_series', symbol, { interval: '1min', outputsize: '500', order: 'ASC' })),
+      providerJson(twelveUrl('time_series', symbol, { interval, outputsize: timeframe === '1m' ? '500' : '180', order: 'ASC' })),
       getQuote(symbol),
     ]);
     if (!Array.isArray(value.values)) fail(503, 'Market candle history is unavailable for this instrument.');
@@ -173,7 +176,7 @@ export function createTradingService(db, options = {}) {
       time: Date.parse(row.datetime.replace(' ', 'T') + 'Z') / 1000,
       open: Number(row.open), high: Number(row.high), low: Number(row.low), close: Number(row.close), volume: Number(row.volume || 0),
     }));
-    return { candles, ...quote, interval: 60 };
+    return { candles, ...quote, interval: TIMEFRAMES[timeframe] };
   };
   const validCandle = bar => bar && positive(bar.time) && ['open', 'high', 'low', 'close'].every(key => positive(bar[key]))
     && bar.high >= Math.max(bar.open, bar.close, bar.low) && bar.low <= Math.min(bar.open, bar.close, bar.high);
@@ -190,6 +193,23 @@ export function createTradingService(db, options = {}) {
     if (!candles.length || candles.some((bar, i) => i && bar.time <= candles[i - 1].time)) fail(503, 'The market provider returned invalid candle times.');
     const market = { candles, ...quote, interval: 60 };
     marketCache.set(symbol, { fetched: clock(), value: market });
+    return market;
+  };
+  const getChartMarket = async (symbol, timeframe) => {
+    checkSymbol(symbol);
+    if (!Object.hasOwn(TIMEFRAMES, timeframe)) fail(400, 'Unsupported chart timeframe.');
+    if (timeframe === '1m') return getMarket(symbol);
+    const key = symbol + ':' + timeframe, cached = chartCache.get(key);
+    if (cached && clock() - cached.fetched < 60000) return { ...cached.value, ...await getQuote(symbol), interval: TIMEFRAMES[timeframe] };
+    let value;
+    try { value = await (options.marketProvider || defaultMarketProvider)(symbol, timeframe); }
+    catch (error) { if (error instanceof ServiceError) throw error; fail(503, 'Chart history is unavailable for this timeframe.'); }
+    if (!Array.isArray(value?.candles) || !value.candles.length || value.demo || value.candles.some(bar => !validCandle(bar))) fail(503, 'The provider returned incomplete chart candles.');
+    const quote = validateQuote(value);
+    const candles = value.candles.slice().sort((a, b) => a.time - b.time).filter(bar => bar.time <= clock() / 1000).slice(-300);
+    if (!candles.length || candles.some((bar, i) => i && bar.time <= candles[i - 1].time)) fail(503, 'The provider returned invalid chart times.');
+    const market = { candles, ...quote, interval: TIMEFRAMES[timeframe], timeframe };
+    chartCache.set(key, { fetched: clock(), value: market });
     return market;
   };
   const getChallenge = async () => {
@@ -340,7 +360,11 @@ export function createTradingService(db, options = {}) {
         entries.sort((a, b) => b.pnl - a.pnl || b.realizedR - a.realizedR);
         return send({ mode, day: mode === 'daily' ? utcDay(clock()) : null, ranked: true, source: 'Server-verified anonymous practice sessions', entries: entries.slice(0, 100) });
       }
-      if (route === '/market' && req.method === 'GET') return send(await getMarket(checkSymbol(url.searchParams.get('symbol') || 'BTC')));
+      if (route === '/market' && req.method === 'GET') {
+        const symbol = checkSymbol(url.searchParams.get('symbol') || 'BTC');
+        const timeframe = url.searchParams.get('timeframe') || '1m';
+        return send(await getChartMarket(symbol, timeframe));
+      }
       if (route === '/quote' && req.method === 'GET') return send(await getQuote(checkSymbol(url.searchParams.get('symbol') || 'BTC')));
       if (route === '/paper/open' && req.method === 'POST') {
         const body = await requestBody(req), symbol = checkSymbol(body.symbol || 'BTC');

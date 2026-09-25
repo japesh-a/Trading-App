@@ -1,7 +1,8 @@
 import {TradingChart} from './trading-chart.js';
 import {INSTRUMENTS,validateOrder,openTrade,advanceTrade,markToMarket,closeTrade,cancelPendingTrade,summarizeTrades} from './trade-engine.js';
 import {loadAccount,getTrades,recordTrade,getSession,saveSession,saveAccount,updateTradeNotes} from './trade-store.js';
-import {loadDaily,loadPaperMarket,paperQuote,requestService,serviceConfig,utcDay} from './market-data.js';
+import {loadDaily,loadDailyContext,loadPaperMarket,loadPaperTimeframe,paperQuote,requestService,serviceConfig,utcDay} from './market-data.js';
+import {TIMEFRAMES,DAILY_TIMEFRAMES,PAPER_TIMEFRAMES,aggregateCandles,withQuote} from './timeframes.js';
 
 export const escapeHTML=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(Number(n)||0);
@@ -16,12 +17,12 @@ function reviewText(trade){
   return `Your ${trade.side==='buy'?'long':'short'} plan risked ${money(risk)} for ${num(trade.plannedRR)}R of planned reward. The trade finished at ${money(trade.pnl)} (${num(trade.realizedR)}R). ${words<20?'Your explanation is brief. Next time, name the market structure, the entry trigger and the price that would invalidate the idea.':'Review whether the structure and trigger you described were visible before the trade. A detailed explanation is useful when it names evidence that could also disprove the idea.'} A profitable outcome does not by itself validate the reasoning. Compare your original plan with the result chart.`;
 }
 export function renderTrading(container,{mode='daily',onToast=()=>{}}){
-  let disposed=false,chart,timer,poller,data,instrument=INSTRUMENTS.BTC,trade=null,cursor=0,speed=1,side='buy',orderType='market',entryDraft=null,running=false,drawings=[],reasoning='',price=0,stale=false,sessionKey='',resultSaved=false,official=null,balance=loadAccount().balance;
-  let generation=0;
+  let disposed=false,chart,timer,poller,data,instrument=INSTRUMENTS.BTC,trade=null,cursor=0,speed=1,side='buy',orderType='market',entryDraft=null,running=false,drawings=[],reasoning='',price=0,stale=false,sessionKey='',resultSaved=false,official=null,balance=loadAccount().balance,timeframe=mode==='daily'?'15m':'1m',viewCandles=[];
+  let generation=0,switchGeneration=0,timeframeCache=new Map();
   const q=s=>container.querySelector(s);
   container.innerHTML=`<div class="page-header"><div class="eyebrow">${mode==='daily'?'DAILY CHALLENGE':'PAPER TRADING'}</div><h1>${mode==='daily'?'One setup. Your decision.':'Your market workspace.'}</h1><p>${mode==='daily'?'Plan a trade, record your reasoning, then replay the next 24 hours.':'A $10,000 simulated account. Build consistency across four markets.'}</p></div><div id="workspace-body"><div class="empty-state">Loading market data…</div></div>`;
   async function load(symbol='BTC'){
-    const token=++generation;clearInterval(timer);clearInterval(poller);chart?.destroy();chart=null;running=false;stale=false;trade=null;cursor=0;resultSaved=false;data=null;orderType='market';entryDraft=null;
+    const token=++generation;switchGeneration++;timeframeCache=new Map();clearInterval(timer);clearInterval(poller);chart?.destroy();chart=null;running=false;stale=false;trade=null;cursor=0;resultSaved=false;data=null;orderType='market';entryDraft=null;timeframe=mode==='daily'?'15m':'1m';viewCandles=[];
     q('#workspace-body').innerHTML='<div class="empty-state">Loading market data…</div>';
     instrument=INSTRUMENTS[symbol];
     sessionKey=mode==='daily'?'daily-'+utcDay():'paper-'+symbol;
@@ -48,18 +49,49 @@ export function renderTrading(container,{mode='daily',onToast=()=>{}}){
       price=mode==='daily'?visible().at(-1).close:data.price;
       if(trade){side=trade.side;orderType=trade.entryType||'market';entryDraft=trade.entry;}
       render();
+      if(saved?.timeframe&&saved.timeframe!==timeframe)void switchTimeframe(saved.timeframe);
       if(mode==='daily'&&resultSaved&&trade&&!getTrades().some(t=>t.id===trade.id))recordTrade({...trade,snapshot:chart.snapshot(),drawings,reasoning,verified:true,source:data.source});
       if(mode==='paper')poller=setInterval(()=>tickPaper(token),data.demo?1000:8000);
     }catch(error){if(!disposed)q('#workspace-body').innerHTML=`<div class="empty-state"><h2>Market data is unavailable</h2><p>${errorText(error)}</p><button class="btn" data-page="${mode==='daily'?'practice':'paper'}">Try again</button></div>`;}
   }
-  function persist(){if(!data)return;saveSession(sessionKey,{data:mode==='daily'?data:undefined,trade,cursor,speed,drawings,reasoning,resultSaved,official,orderType,entryDraft});}
+  function persist(){if(!data)return;saveSession(sessionKey,{data:mode==='daily'?data:undefined,trade,cursor,speed,drawings,reasoning,resultSaved,official,orderType,entryDraft,timeframe});}
   function visible(){return mode==='daily'?[...data.history,...(data.future||[]).slice(0,cursor)]:data.candles;}
+  function chartCandles(){
+    if(mode==='paper')return timeframe==='1m'?data.candles.slice(-180):viewCandles;
+    const revealed=visible();
+    if(timeframe==='15m')return revealed;
+    const context=(data.context||[]).filter(c=>c.time<revealed[0].time);
+    return aggregateCandles([...context,...revealed],TIMEFRAMES[timeframe]).slice(-180);
+  }
+  async function switchTimeframe(next){
+    if(!(mode==='daily'?DAILY_TIMEFRAMES:PAPER_TIMEFRAMES).includes(next)||!data)return;
+    const token=++switchGeneration,market=instrument.id;
+    const note=q('#timeframe-note');if(note)note.textContent='Loading '+next+' chart…';
+    if(mode==='daily'&&next!=='15m'&&!Array.isArray(data.context)){
+      try{data.context=await loadDailyContext(data);}catch{data.context=[];data.contextLimited=true;}
+    }
+    if(mode==='paper'&&next!=='1m'){
+      const cached=timeframeCache.get(next);
+      if(cached&&Date.now()-cached.time<120000)viewCandles=cached.candles;
+      else try{const candles=await loadPaperTimeframe(market,next,data);if(disposed||token!==switchGeneration||market!==instrument.id)return;viewCandles=candles.slice(-180);timeframeCache.set(next,{time:Date.now(),candles:viewCandles});}
+      catch(error){if(!disposed&&token===switchGeneration){q('#timeframe-note').textContent='Chart unavailable for '+next;onToast(error.message);}return;}
+    }
+    if(disposed||token!==switchGeneration||market!==instrument.id)return;
+    timeframe=next;persist();
+    container.querySelectorAll('[data-timeframe]').forEach(button=>{const selected=button.dataset.timeframe===next;button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));});
+    q('.terminal-head div span').textContent=' '+next+(mode==='daily'?' · Replay':' · Paper');
+    q('#timeframe-note').textContent=mode==='daily'?(next==='15m'?'15-minute replay candles':data.contextLimited?'Limited earlier history · revealed bars only':'Higher views use only revealed candles'):(data.demo?'Synthetic training chart':'Chart view · execution uses live quotes');
+    chart.setData(chartCandles());chart.resetView();
+  }
   function formatPrice(value){return num(value,instrument.decimals);}
   function render(){
     chart?.destroy();chart=null;
     const hasTrade=!!trade;const available=mode==='daily'?10000:data.connected?balance:loadAccount().balance;
     q('#workspace-body').innerHTML=`<div class="account-bar"><span><b>${mode==='daily'?'Daily allocation':'Paper balance'}</b> ${money(available)}</span><span class="status-pill ${data.demo?'demo':'live'}">${escapeHTML(data.source)}</span><span id="feed-status">${mode==='daily'?escapeHTML(data.marketDate)+' · 15-minute candles':'Quotes refresh every 8 seconds'}</span></div>${mode==='paper'?`<div class="market-tabs">${Object.values(INSTRUMENTS).map(i=>`<button data-market="${i.id}" class="${i.id===instrument.id?'active':''}">${escapeHTML(i.label||i.id)}</button>`).join('')}</div>`:''}<div class="metric-strip">${metric('Last price',formatPrice(price),'USD quote')}${metric('Open P/L','<span id="trade-pnl">$0.00</span>','Updates with the market')}${metric('Planned R:R','<span id="planned-rr">—</span>','Reward ÷ initial risk')}${metric(mode==='daily'?'Replay progress':'Account mode',mode==='daily'?'<span id="replay-progress">0 / 96 bars</span>':data.demo?'Training feed':'Live quotes',mode==='daily'?'24-hour session':'Simulated execution')}</div><div class="terminal-grid"><div class="terminal-main"><section class="terminal-card"><div class="terminal-head"><div><b>${escapeHTML(instrument.label||instrument.id)}</b><span> ${mode==='daily'?'15m · Replay':'1m · Paper'}</span></div><span class="status-pill" id="position-status">${trade?trade.status==='closed'?'Closed':'Position open':'Ready to plan'}</span></div><div class="chart-toolbar"><div class="chart-tools"><button class="active" data-tool="cursor" title="Move and inspect chart">↖ Inspect</button><button data-tool="trend">╱ Trend line</button><button data-tool="horizontal">― Level</button><button data-tool="label">T Label</button><button id="clear-drawings">Clear</button></div><input id="chart-label" aria-label="Chart label text" maxlength="48" placeholder="Label text" value="My level"></div><div class="chart-area" id="trading-chart"></div><div class="replay-controls">${mode==='daily'?`<button class="btn primary" id="play-replay" ${!hasTrade||resultSaved?'disabled':''}>▶ ${cursor?'Resume':'Play replay'}</button><button class="btn" id="next-bar" ${!hasTrade||resultSaved?'disabled':''}>Next bar →</button><label>Speed <select id="replay-speed">${[1,2,5,10].map(n=>`<option ${speed===n?'selected':''} value="${n}">${n}×</option>`).join('')}</select></label><span id="replay-time">${stamp(visible().at(-1).time)}</span>`:`<span>${data.demo?'Synthetic prices for practising execution.':'Live market quotes with simulated fills.'}</span><button class="btn" id="close-position" ${trade?.status==='open'?'':'disabled'}>Close position</button>`}</div></section><section class="reasoning-panel"><div class="section-heading"><h3>${mode==='daily'?'Your trade thesis':'Trade notes'}</h3><span>${mode==='daily'?'Recorded before the reveal':'Saved in your journal'}</span></div><label for="trade-reasoning">Describe the structure, entry trigger and what would invalidate your idea.</label><textarea id="trade-reasoning" rows="4" maxlength="2500" placeholder="I see… My entry is based on… This idea would be wrong if…" ${hasTrade&&mode==='daily'?'readonly':''}>${escapeHTML(reasoning)}</textarea></section><div id="trade-review"></div></div><aside class="order-ticket"><div class="eyebrow">ORDER TICKET</div><h3>Plan your position</h3><div class="side-toggle"><button data-order-side="buy" class="${side==='buy'?'active':''}">Buy / Long</button><button data-order-side="sell" class="${side==='sell'?'active':''}">Sell / Short</button></div><div class="form-field"><label>Entry · current market</label><input id="order-entry" type="number" readonly></div><div class="form-field"><label for="order-stop">Stop loss</label><input id="order-stop" type="number" step="any"></div><div class="form-field"><label for="order-target">Take profit</label><input id="order-target" type="number" step="any"></div><div class="form-field"><label for="order-risk">Risk amount · USD</label><input id="order-risk" type="number" min="1" max="${mode==='daily'?100:Math.max(1,available)}" step="1" value="100"></div><p class="ticket-hint">Drag the SL and TP lines on the chart, or enter exact prices above.</p><div id="order-summary"></div><p id="order-error" role="alert"></p><button class="btn primary full" id="place-order" ${hasTrade||available<=0?'disabled':''}>${mode==='daily'?'Lock trade & start replay':'Open paper position'}</button><details class="execution-notes"><summary>How fills and results work</summary><p>Market entry at the displayed quote. Stop gaps fill at the next available open; targets fill at their level. If a replay candle touches both, the stop is counted first. Zero fees and spread in this simulation. P/L is in USD; one index point uses a $1 multiplier per unit.</p><p>${mode==='daily'?'One recorded attempt per UTC day in this browser. An online leaderboard uses server-checked results.':'Keep this workspace open for quote-based execution. Reopening reconciles completed candles; execution is approximate, especially across disconnections.'}</p></details>${data.demo?`<p class="connection-note">${escapeHTML(data.message||'This is a synthetic practice sample. It is excluded from online rankings.')}</p>`:''}</aside></div>`;
     q('[data-tool="horizontal"]').insertAdjacentHTML('afterend','<button data-tool="fib" title="Mark Fibonacci retracement levels across a price swing">% Fib retracement</button>');
+    q('.chart-area').insertAdjacentHTML('beforebegin',`<div class="timeframe-bar"><div class="timeframe-tabs" role="group" aria-label="Chart timeframe">${(mode==='daily'?DAILY_TIMEFRAMES:PAPER_TIMEFRAMES).map(value=>`<button data-timeframe="${value}" class="${value===timeframe?'active':''}" aria-pressed="${value===timeframe}" type="button">${value}</button>`).join('')}</div><span id="timeframe-note">${mode==='daily'?'Replay reveals 15-minute bars':'Chart view · execution uses quotes'}</span></div>`);
+    q('.terminal-head div span').textContent=' '+timeframe+(mode==='daily'?' · Replay':' · Paper');
+    q('#timeframe-note').textContent=mode==='daily'?(timeframe==='15m'?'15-minute replay candles':data.contextLimited?'Limited earlier history · revealed bars only':'Higher views use only revealed candles'):(data.demo?'Synthetic training chart':'Chart view · execution uses live quotes');
     q('#order-entry').closest('.form-field').insertAdjacentHTML('beforebegin','<div class="form-field"><label for="order-type">Entry method</label><select id="order-type"><option value="market">Market now</option><option value="trigger">At chosen price</option></select></div>');
     q('#order-type').value=orderType;
     q('#place-order').textContent=orderType==='trigger'?(mode==='daily'?'Lock price entry & start replay':'Place price entry'):mode==='daily'?'Lock trade & start replay':'Open paper position';
@@ -68,7 +100,7 @@ export function renderTrading(container,{mode='daily',onToast=()=>{}}){
     q('.ticket-hint').textContent='Drag the entry, stop and target lines on the chart, or type exact prices. A chosen entry waits for price to reach it.';
     q('.execution-notes p').textContent='Market orders enter at the displayed quote. Chosen-price orders wait for that level; if a candle crosses it, the fill is at the selected price and exits start on the following candle. Stop gaps fill at the next available open; targets fill at their level. If a candle touches both exits, the stop is counted first. Zero fees and spread in this simulation.';
     if(mode==='paper'){q('#close-position').disabled=!['open','pending'].includes(trade?.status);q('#close-position').textContent=trade?.status==='pending'?'Cancel pending entry':'Close position';}
-    chart=new TradingChart(q('#trading-chart'),{candles:visible(),symbol:instrument.id,decimals:instrument.decimals,drawings,onDrawingsChange:value=>{drawings=value;persist();},onLevelChange:levels=>{if(trade){setChartLevels();return;}if(Number.isFinite(levels.entry)&&Math.abs(levels.entry-draft().entry)>10**(-instrument.decimals)*.51){orderType='trigger';entryDraft=levels.entry;q('#order-type').value='trigger';q('#order-entry').readOnly=false;q('#order-entry').closest('.form-field').querySelector('label').textContent='Entry · drag line or type a price';q('#order-entry').value=formatPrice(levels.entry);q('#place-order').textContent=mode==='daily'?'Lock price entry & start replay':'Place price entry';}q('#order-stop').value=formatPrice(levels.stopLoss);q('#order-target').value=formatPrice(levels.takeProfit);updateDraft();persist();}});
+    chart=new TradingChart(q('#trading-chart'),{candles:chartCandles(),symbol:instrument.id,decimals:instrument.decimals,drawings,onDrawingsChange:value=>{drawings=value;persist();},onLevelChange:levels=>{if(trade){setChartLevels();return;}if(Number.isFinite(levels.entry)&&Math.abs(levels.entry-draft().entry)>10**(-instrument.decimals)*.51){orderType='trigger';entryDraft=levels.entry;q('#order-type').value='trigger';q('#order-entry').readOnly=false;q('#order-entry').closest('.form-field').querySelector('label').textContent='Entry · drag line or type a price';q('#order-entry').value=formatPrice(levels.entry);q('#place-order').textContent=mode==='daily'?'Lock price entry & start replay':'Place price entry';}q('#order-stop').value=formatPrice(levels.stopLoss);q('#order-target').value=formatPrice(levels.takeProfit);updateDraft();persist();}});
     defaults();wire();updateUI();if(resultSaved)showResult();
     if(mode==='paper'&&!data.connected&&['open','pending'].includes(trade?.status)){
       for(const bar of data.candles.filter(c=>c.time>(trade.entryTime??trade.placedTime)&&c.time+60<Date.now()/1000)){trade=advanceTrade(trade,bar);if(trade.status==='closed')break;}
@@ -97,6 +129,7 @@ export function renderTrading(container,{mode='daily',onToast=()=>{}}){
     setChartLevels();
   }
   function wire(){
+    container.querySelectorAll('[data-timeframe]').forEach(button=>button.onclick=()=>void switchTimeframe(button.dataset.timeframe));
     container.querySelectorAll('[data-market]').forEach(b=>b.onclick=()=>{persist();load(b.dataset.market);});
     container.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{container.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('active',x===b));chart.setLabel(q('#chart-label').value);chart.setTool(b.dataset.tool);});
     q('#chart-label').oninput=()=>chart.setLabel(q('#chart-label').value);
@@ -133,7 +166,7 @@ export function renderTrading(container,{mode='daily',onToast=()=>{}}){
     if(disposed||resultSaved||!trade)return;
     const bar=data.future?.[cursor];if(!bar)return;cursor++;price=bar.close;
     if(trade.status==='open'||trade.status==='pending')trade=advanceTrade(trade,bar);
-    chart.setData(visible());updateUI();persist();
+    chart.setData(chartCandles());updateUI();persist();
     if(cursor>=data.future.length){if(trade.status==='open'||trade.status==='pending')trade=closeTrade(trade,bar.close,bar.time,'session-end');finish();}
   }
   function updateUI(){
@@ -157,7 +190,10 @@ export function renderTrading(container,{mode='daily',onToast=()=>{}}){
       if(data.connected)q('.account-bar span').innerHTML='<b>Paper balance</b> '+money(balance);
       const bucket=Math.floor(quote.time/60)*60,last=data.candles.at(-1);
       if(last.time===bucket){last.high=Math.max(last.high,price);last.low=Math.min(last.low,price);last.close=price;}else data.candles.push({time:bucket,open:last.close,high:Math.max(last.close,price),low:Math.min(last.close,price),close:price,volume:0});
-      data.candles=data.candles.slice(-180);chart.setData(data.candles);
+      data.candles=data.candles.slice(data.demo?-(30*24*60):-500);
+      if(timeframe==='1m')chart.setData(chartCandles());
+      else if(data.demo){viewCandles=aggregateCandles(data.candles,TIMEFRAMES[timeframe]).slice(-180);timeframeCache.set(timeframe,{time:Date.now(),candles:viewCandles});chart.setData(viewCandles);}
+      else {viewCandles=withQuote(viewCandles,quote,TIMEFRAMES[timeframe]).slice(-180);timeframeCache.set(timeframe,{time:Date.now(),candles:viewCandles});chart.setData(viewCandles);}
       if(['open','pending'].includes(trade?.status)&&!data.connected){trade=advanceTrade(trade,{time:quote.time,open:previous,high:Math.max(previous,price),low:Math.min(previous,price),close:price,volume:0});if(trade.status==='closed')finish();}
       else if(trade?.status==='closed'&&!resultSaved)finish();
       else if(!trade&&orderType==='market'){q('#order-entry').value=formatPrice(price);updateDraft();}

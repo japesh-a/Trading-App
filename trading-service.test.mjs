@@ -69,6 +69,31 @@ test('sessions are authenticated, token hashes persist, and CORS/body limits app
   } finally { await f.close(); }
 });
 
+test('chart history supports every paper timeframe without changing the execution feed', async () => {
+  const requests = [];
+  const f = await fixture({ marketProvider: async (symbol, timeframe = '1m') => {
+    requests.push([symbol, timeframe]);
+    const seconds = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400 }[timeframe];
+    return { candles: [{ time: Date.parse('2026-09-25T12:00:00Z') / 1000 - seconds,
+      open: 100, high: 101, low: 99, close: 100, volume: 1 }],
+    price: 100, time: Date.parse('2026-09-25T12:00:00Z') / 1000, source: 'Market fixture', demo: false };
+  } });
+  try {
+    const token = (await f.call('/session', {})).data.token;
+    for (const [timeframe, interval] of Object.entries({ '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400 })) {
+      const result = await f.call('/market?symbol=BTC&timeframe=' + timeframe, undefined, token);
+      assert.equal(result.status, 200);
+      assert.equal(result.data.interval, interval);
+      assert.equal(result.data.candles.length, 1);
+    }
+    const cached = await f.call('/market?symbol=BTC&timeframe=1h', undefined, token);
+    assert.equal(cached.data.interval, 3600, 'Cached chart history keeps its requested interval');
+    assert.equal(requests.filter(([, frame]) => frame === '1h').length, 1);
+    assert.equal((await f.call('/market?symbol=BTC&timeframe=2h', undefined, token)).status, 400);
+    assert.equal((await f.call('/market?symbol=BTC', undefined, token)).data.interval, 60);
+  } finally { await f.close(); }
+});
+
 test('daily routes hide future bars, enforce entry/risk/one attempt, and calculate P/L themselves', async () => {
   const f = await fixture();
   try {
