@@ -15,7 +15,7 @@ const html = source
   .replace('href="/style.css"', 'href="./style.css"')
   .replace('Built for better decisions.<span>', 'Built for better decisions. <a href="https://github.com/japesh-a/Trading-App/issues" target="_blank" rel="noopener noreferrer">Share feedback on GitHub ↗</a><span>')
   .replace('<script type="module" src="/app.js"></script>',
-    '<script>window.__WICKLUME_STATIC__=true</script><script src="./pages-adapter.js"></script><script type="module" src="./app.js"></script>');
+    '<script>window.__WICKLUME_STATIC__=true</script><script src="./pages-adapter.js?v=all-lessons"></script><script type="module" src="./app.js?v=all-lessons"></script>');
 if (html === source || !html.includes('__WICKLUME_STATIC__')) throw Error('Static HTML transformation failed');
 writeFileSync(path.join(output, 'index.html'), html);
 writeFileSync(path.join(output, 'site-data.json'), JSON.stringify({
