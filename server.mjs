@@ -25,7 +25,6 @@ http.createServer(async(req,res)=>{
  if(url.pathname==='/api/answer'){
   const q=body.question,answer=body.answer,lesson=lessons[id];
   if(!Number.isInteger(q)||q<0||q>=lesson.questions.length||!Number.isInteger(answer)||answer<0||answer>2)throw Error('Invalid answer');
-  if(id>0&&!s.completed.includes(id-1))throw Error('Complete the previous lesson first');
   s.answers??={};s.answers[id]??=[];
   if(q!==s.answers[id].length)throw Error('Answer the questions in order');
   const correctAnswer=correctIndex(id,q),correct=answer===correctAnswer;

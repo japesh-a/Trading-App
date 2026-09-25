@@ -12,10 +12,12 @@ try{
  const course=await call('/api/lessons');
  assert.equal(course.data.length,18);
  assert(course.data.every(lesson=>lesson.slides.length===3&&lesson.questions.length===10));
- assert.equal((await call('/api/answer',{id:1,question:0,answer:0})).status,400);
+ const laterLesson=await call('/api/answer',{id:17,question:0,answer:0});
+ assert.equal(laterLesson.status,200,'Any lesson should be available from the start');
+ assert.deepEqual(laterLesson.data.progress.completed,[],'Opening a lesson does not complete it');
  assert.equal((await call('/api/answer',{id:0,question:1,answer:0})).status,400);
  for(let id=0;id<18;id++){
-  for(let question=0;question<10;question++){
+  for(let question=id===17?1:0;question<10;question++){
    const result=await call('/api/answer',{id,question,answer:0});
    assert.equal(result.status,200,`Lesson ${id+1}, question ${question+1}`);
    assert.equal(result.data.completed,question===9);

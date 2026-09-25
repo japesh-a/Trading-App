@@ -45,7 +45,6 @@
           !Number.isInteger(body.answer) || body.answer < 0 || body.answer > 2) {
         return reply({ error: 'Invalid answer' }, 400);
       }
-      if (id > 0 && !state.completed.includes(id - 1)) return reply({ error: 'Complete the previous lesson first' }, 400);
       state.answers ??= {};
       state.answers[id] ??= [];
       if (question !== state.answers[id].length) return reply({ error: 'Answer the questions in order' }, 400);
