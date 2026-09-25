@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { lessons, publicLessons, correctIndex } from './curriculum.mjs';
 import { previousDayChallenge, coinbaseCandles, utcDay } from './public/market-data.js';
-import { INITIAL_BALANCE, INSTRUMENTS, openTrade, advanceTrade, closeTrade, markToMarket, summarizeTrades } from './public/trade-engine.js';
+import { INITIAL_BALANCE, INSTRUMENTS, openTrade, advanceTrade, closeTrade, cancelPendingTrade, markToMarket, summarizeTrades } from './public/trade-engine.js';
 
 class ServiceError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -85,10 +85,6 @@ export function createTradingService(db, options = {}) {
     const row = db.prepare('SELECT value FROM trading_learning WHERE session_id=?').get(sessionId);
     return row ? jsonParse(row.value) : emptyProgress();
   };
-  const paperUnlocked = sessionId => {
-    const progress = getProgress(sessionId);
-    return lessons.every((lesson, id) => progress.completed.includes(id) && progress.answers[id]?.length === lesson.questions.length);
-  };
   const updateName = (session, displayName) => {
     if (typeof displayName === 'string') {
       session.display_name = name(displayName);
@@ -102,7 +98,9 @@ export function createTradingService(db, options = {}) {
     return row ? jsonParse(row.value) : null;
   };
   const savePosition = (sessionId, trade) => {
-    if (trade.status === 'closed') {
+    if (trade.status === 'cancelled') {
+      db.prepare('DELETE FROM trading_paper_positions WHERE session_id=?').run(sessionId);
+    } else if (trade.status === 'closed') {
       db.exec('BEGIN IMMEDIATE');
       try {
         db.prepare('INSERT OR IGNORE INTO trading_paper_trades VALUES(?,?,?)').run(trade.id, sessionId, JSON.stringify(trade));
@@ -216,12 +214,12 @@ export function createTradingService(db, options = {}) {
   };
 
   const reconcile = async (sessionId, trade, quote) => {
-    if (!trade || trade.status !== 'open') return trade;
+    if (!trade || !['open', 'pending'].includes(trade.status)) return trade;
     if (quote.time < trade.entryTime || quote.time < (trade.lastQuoteTime ?? trade.entryTime)) fail(503, 'The market quote arrived out of order. Please retry.');
     let current = trade;
     try {
       const market = await getMarket(trade.instrument.id);
-      const candles = market.candles.filter(bar => bar.time + 60 <= quote.time && bar.time > trade.entryTime && bar.time > trade.lastBarTime);
+      const candles = market.candles.filter(bar => bar.time + 60 <= quote.time && bar.time > (trade.entryTime ?? trade.placedTime) && bar.time > trade.lastBarTime);
       if (candles.length && candles[0].time > Math.ceil((trade.lastBarTime + 1) / 60) * 60) current = { ...current, reconciliationPartial: true };
       for (const bar of candles) {
         current = advanceTrade(current, bar);
@@ -230,6 +228,12 @@ export function createTradingService(db, options = {}) {
     } catch (error) {
       if (!(error instanceof ServiceError)) throw error;
       current = { ...current, reconciliationPartial: true };
+    }
+    if (current.status === 'pending') {
+      const previous = current.lastPrice;
+      current = advanceTrade(current, { time: quote.time, open: previous, high: Math.max(previous, quote.price), low: Math.min(previous, quote.price), close: quote.price, volume: 0 });
+      current = { ...current, lastQuoteTime: quote.time };
+      return savePosition(sessionId, current);
     }
     if (current.status === 'open') {
       const buy = current.side === 'buy';
@@ -258,7 +262,7 @@ export function createTradingService(db, options = {}) {
       const route = url.pathname.slice('/api/trading'.length), ip = req.socket.remoteAddress || 'unknown';
       rateLimit(`ip:${ip}`, 240);
       if (route === '/config' && req.method === 'GET') return send({
-        dailyRanked: true, paperRanked: true, lessonGateVerified: true,
+        dailyRanked: true, paperRanked: true, lessonGateVerified: false, paperTradingOpen: true,
         coach: Boolean(env.OPENAI_API_KEY && env.OPENAI_MODEL),
         markets: { BTC: true, US500: Boolean(env.TWELVE_DATA_API_KEY), XAUUSD: Boolean(env.TWELVE_DATA_API_KEY), GBPUSD: Boolean(env.TWELVE_DATA_API_KEY) },
         accountType: 'anonymous-device-session', initialBalance: INITIAL_BALANCE,
@@ -303,14 +307,15 @@ export function createTradingService(db, options = {}) {
           if (body.challengeId !== challenge.id) fail(409, 'Load the current daily challenge before submitting.');
           if (db.prepare('SELECT trade_id FROM trading_daily_results WHERE session_id=? AND day=?').get(session.id, challenge.day)) fail(409, 'This session has already submitted today’s challenge.');
           const entryBar = challenge.history.at(-1);
-          if (!body.order || body.order.entry !== entryBar.close) fail(400, 'Entry must match the last visible challenge close.');
+          const entryType = body.entryType || 'market';
+          if (!body.order || (entryType === 'market' && body.order.entry !== entryBar.close)) fail(400, 'Market entry must match the last visible challenge close.');
           const reasoning = text(body.reasoning, 6000);
           if (reasoning.length < 10) fail(400, 'Explain your trade in at least 10 characters.');
-          let trade = openTrade(body.order, { instrument: 'BTC', mode: 'daily', challengeId: challenge.id, time: entryBar.time, reasoning, balance: INITIAL_BALANCE });
+          let trade = openTrade(body.order, { instrument: 'BTC', mode: 'daily', challengeId: challenge.id, time: entryBar.time, reasoning, balance: INITIAL_BALANCE, entryType, currentPrice: entryBar.close });
           if (trade.initialRisk > 100 + 1e-8) fail(400, 'Daily challenge risk is limited to $100.');
           trade = { ...trade, ranked: true, serverVerified: true, source: challenge.source };
           for (const bar of challenge.future) trade = advanceTrade(trade, bar);
-          if (trade.status === 'open') { const finalBar = challenge.future.at(-1); trade = closeTrade(trade, finalBar.close, finalBar.time, 'session-end'); }
+          if (trade.status === 'open' || trade.status === 'pending') { const finalBar = challenge.future.at(-1); trade = closeTrade(trade, finalBar.close, finalBar.time, 'session-end'); }
           updateName(session, body.displayName);
           db.prepare('INSERT INTO trading_daily_results VALUES(?,?,?,?)').run(session.id, challenge.day, trade.id, JSON.stringify(trade));
           return send({ future: challenge.future, trade });
@@ -340,11 +345,11 @@ export function createTradingService(db, options = {}) {
       if (route === '/paper/open' && req.method === 'POST') {
         const body = await requestBody(req), symbol = checkSymbol(body.symbol || 'BTC');
         return await serial(session.id, async () => {
-          if (!paperUnlocked(session.id)) fail(403, 'Complete all 18 lessons in this connected account to unlock paper trading.');
           if (paperPosition(session.id)) fail(409, 'Close the existing paper position before opening another.');
           const quote = await getQuote(symbol), balance = paperBalance(session.id);
-          const order = { ...body.order, entry: quote.price };
-          let trade = openTrade(order, { instrument: symbol, mode: 'paper', time: quote.time, reasoning: text(body.reasoning, 6000), balance });
+          const entryType = body.entryType || 'market';
+          const order = { ...body.order, entry: entryType === 'market' ? quote.price : body.order?.entry };
+          let trade = openTrade(order, { instrument: symbol, mode: 'paper', time: quote.time, reasoning: text(body.reasoning, 6000), balance, entryType, currentPrice: quote.price });
           trade = { ...trade, ranked: true, serverVerified: true, source: quote.source, lastQuoteTime: quote.time };
           updateName(session, body.displayName);
           savePosition(session.id, trade);
@@ -356,7 +361,7 @@ export function createTradingService(db, options = {}) {
           const position = paperPosition(session.id), symbol = position?.instrument.id || checkSymbol(url.searchParams.get('symbol') || 'BTC');
           const quote = await getQuote(symbol);
           const trade = await reconcile(session.id, position, quote);
-          return send({ trade, balance: paperBalance(session.id), quote, unlocked: paperUnlocked(session.id), trades: paperTrades(session.id).slice(-10).reverse() });
+          return send({ trade, balance: paperBalance(session.id), quote, unlocked: true, trades: paperTrades(session.id).slice(-10).reverse() });
         });
       }
       if (route === '/paper/close' && req.method === 'POST') {
@@ -364,6 +369,10 @@ export function createTradingService(db, options = {}) {
         return await serial(session.id, async () => {
           const position = paperPosition(session.id);
           if (!position) fail(409, 'There is no open paper position.');
+          if (position.status === 'pending') {
+            const trade = savePosition(session.id, cancelPendingTrade(position, clock() / 1000));
+            return send({ trade, balance: paperBalance(session.id), quote: { price: position.lastPrice, time: position.lastQuoteTime, source: position.source } });
+          }
           const quote = await getQuote(position.instrument.id);
           let trade = await reconcile(session.id, position, quote);
           if (trade.status === 'open') trade = savePosition(session.id, closeTrade(trade, quote.price, quote.time, 'manual'));

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { INSTRUMENTS, validateOrder, openTrade, advanceTrade, markToMarket, closeTrade, summarizeTrades } from './public/trade-engine.js';
+import { INSTRUMENTS, validateOrder, openTrade, advanceTrade, markToMarket, closeTrade, cancelPendingTrade, summarizeTrades } from './public/trade-engine.js';
 
 const buy = { side: 'buy', entry: 100, stopLoss: 95, takeProfit: 110, quantity: 2 };
 const sell = { side: 'sell', entry: 100, stopLoss: 105, takeProfit: 90, quantity: 2 };
@@ -154,4 +154,31 @@ test('journal deduplicates, preserves notes, isolates daily P/L, and survives st
   store.clearSession('daily-2026-09-25');
   assert.equal(store.getSession('daily-2026-09-25'), null);
   delete globalThis.localStorage;
+});
+
+test('chosen-price orders wait for the level, fill once, and start exits on the next bar', () => {
+  const pending = openTrade({ ...buy, entry: 105, stopLoss: 95 }, { ...options, entryType: 'trigger', currentPrice: 100 });
+  assert.equal(pending.status, 'pending');
+  assert.equal(pending.entryTime, null);
+  assert.equal(markToMarket(pending, 103), 0);
+  const waiting = advanceTrade(pending, candle({ high: 104, low: 99 }));
+  assert.equal(waiting.status, 'pending');
+  const filled = advanceTrade(waiting, candle({ time: 2800, high: 112, low: 94 }));
+  assert.equal(filled.status, 'open');
+  assert.equal(filled.entryTime, 2800);
+  assert.equal(filled.entry, 105);
+  assert.equal(filled.pnl, undefined, 'The crossing bar cannot also settle an exit');
+  const stopped = advanceTrade(filled, candle({ time: 3700, open: 104, high: 105, low: 94 }));
+  assert.equal(stopped.status, 'closed');
+  assert.equal(stopped.pnl, -20);
+  const untouched = closeTrade(waiting, 102, 2800, 'session-end');
+  assert.equal(untouched.entryFilled, false);
+  assert.equal(untouched.pnl, 0);
+  assert.equal(summarizeTrades([untouched, stopped]).count, 1);
+  assert.equal(cancelPendingTrade(waiting, 2800).status, 'cancelled');
+  assert.throws(() => closeTrade(waiting, 102, 2800), /Cancel/);
+  const shortPending = openTrade({ ...sell, entry: 95, stopLoss: 105 }, { ...options, entryType: 'trigger', currentPrice: 100 });
+  const shortFilled = advanceTrade(shortPending, candle({ low: 94 }));
+  assert.equal(shortFilled.status, 'open');
+  assert.equal(advanceTrade(shortFilled, candle({ time: 2800, open: 94, high: 96, low: 89, close: 92 })).pnl, 10);
 });

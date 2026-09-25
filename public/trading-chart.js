@@ -52,12 +52,13 @@ function cleanDrawings(values) {
   if (!Array.isArray(values)) return [];
   const validPoint = point => point && finite(point.time) && finite(point.price);
   return values.slice(0, 100).flatMap((drawing, index) => {
-    if (!drawing || !['trend', 'horizontal', 'label'].includes(drawing.type)) return [];
-    const points = drawing.type === 'trend' ? drawing.points : [{ time: drawing.time, price: drawing.price }];
-    if (!Array.isArray(points) || !points.every(validPoint) || (drawing.type === 'trend' && points.length !== 2)) return [];
+    if (!drawing || !['trend', 'fib', 'horizontal', 'label'].includes(drawing.type)) return [];
+    const twoPoint = drawing.type === 'trend' || drawing.type === 'fib';
+    const points = twoPoint ? drawing.points : [{ time: drawing.time, price: drawing.price }];
+    if (!Array.isArray(points) || !points.every(validPoint) || (twoPoint && points.length !== 2)) return [];
     return [{
       id: String(drawing.id || `restored-${index}`).slice(0, 80), type: drawing.type,
-      ...(drawing.type === 'trend' ? { points: points.map(point => ({ time: Number(point.time), price: Number(point.price) })) }
+      ...(twoPoint ? { points: points.map(point => ({ time: Number(point.time), price: Number(point.price) })) }
         : { time: Number(drawing.time), price: Number(drawing.price) }),
       ...(drawing.type === 'label' ? { text: String(drawing.text || 'My note').slice(0, 120) } : {})
     }];
@@ -111,7 +112,7 @@ export class TradingChart {
       .wl-chart__reset:hover { background:#20334e;color:#e8f1ff; }
       .wl-chart__reset:focus-visible { outline:2px solid #77adff;outline-offset:2px; }
       .wl-chart__hint { position:absolute;left:14px;bottom:34px;font-size:9px;color:#61758f;pointer-events:none;letter-spacing:.02em; }
-      .wl-chart[data-tool="trend"] .wl-chart__svg,.wl-chart[data-tool="horizontal"] .wl-chart__svg,.wl-chart[data-tool="label"] .wl-chart__svg { cursor:crosshair; }
+      .wl-chart[data-tool="trend"] .wl-chart__svg,.wl-chart[data-tool="fib"] .wl-chart__svg,.wl-chart[data-tool="horizontal"] .wl-chart__svg,.wl-chart[data-tool="label"] .wl-chart__svg { cursor:crosshair; }
       .wl-chart__live { position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%); }
       @media(max-width:600px) { .wl-chart__readout { top:12px;gap:4px 8px; }.wl-chart__ohlc { font-size:9px; }.wl-chart__hint { font-size:8px; } }
     </style>
@@ -177,12 +178,13 @@ export class TradingChart {
   }
 
   setTool(tool) {
-    this.tool = ['cursor', 'trend', 'horizontal', 'label'].includes(tool) ? tool : 'cursor';
+    this.tool = ['cursor', 'trend', 'fib', 'horizontal', 'label'].includes(tool) ? tool : 'cursor';
     this.draft = null;
     this.wrapper.dataset.tool = this.tool;
     this.hint.textContent = {
       cursor: 'SCROLL TO ZOOM · DRAG TO PAN',
       trend: 'CLICK TWO POINTS FOR A TREND LINE · ESC TO CANCEL',
+      fib: 'CLICK THE START AND END OF A PRICE SWING · ESC TO CANCEL',
       horizontal: 'CLICK A PRICE TO MARK A LEVEL',
       label: 'CLICK THE CHART TO PLACE YOUR NOTE'
     }[this.tool];
@@ -366,7 +368,7 @@ export class TradingChart {
         const deltaPrice = this.priceAt(point.y) - this.priceAt(drag.start.y);
         const move = source => ({ time: this.timeAt(this.indexFor(source.time) + deltaIndex), price: source.price + deltaPrice });
         const drawing = this.drawings.find(item => item.id === this.selected);
-        if (drawing.type === 'trend') drawing.points = drag.initial.points.map((item, index) =>
+        if (drawing.type === 'trend' || drawing.type === 'fib') drawing.points = drag.initial.points.map((item, index) =>
           drag.endpoint === null || Number(drag.endpoint) === index ? move(item) : { ...item });
         else Object.assign(drawing, move(drag.initial));
       }
@@ -407,16 +409,16 @@ export class TradingChart {
     if (this.drawings.length >= 100) { this.live.textContent = 'Drawing limit reached. Clear a drawing to add another.'; return; }
     const anchor = this.anchor(point);
     const id = `${this.id}-${Date.now()}-${this.drawings.length}`;
-    if (this.tool === 'trend') {
-      if (!this.draft) { this.draft = anchor; this.live.textContent = 'First point added. Select the end of your trend line.'; return; }
-      this.drawings.push({ id, type: 'trend', points: [this.draft, anchor] });
+    if (this.tool === 'trend' || this.tool === 'fib') {
+      if (!this.draft) { this.draft = anchor; this.live.textContent = this.tool === 'fib' ? 'Swing start selected. Select the swing end.' : 'First point added. Select the end of your trend line.'; return; }
+      this.drawings.push({ id, type: this.tool, points: [this.draft, anchor] });
       this.draft = null;
     } else if (this.tool === 'horizontal') this.drawings.push({ id, type: 'horizontal', ...anchor });
     else if (this.tool === 'label') this.drawings.push({ id, type: 'label', ...anchor, text: this.labelText });
     else return;
     this.selected = id;
     this.onDrawingsChange(this.getDrawings());
-    this.live.textContent = `${this.tool === 'label' ? 'Note' : 'Line'} added to chart.`;
+    this.live.textContent = `${this.tool === 'label' ? 'Note' : this.tool === 'fib' ? 'Fibonacci retracement' : 'Line'} added to chart.`;
   }
 
   wheel(event) {
@@ -467,6 +469,18 @@ export class TradingChart {
       return `<g ${attributes}>${!snapshot ? line(points[0].x, points[0].y, points[1].x, points[1].y, 'transparent', 'stroke-width="16" style="cursor:move"') : ''}
         ${line(points[0].x, points[0].y, points[1].x, points[1].y, color, 'stroke-width="1.6"')}
         ${selected ? points.map((point, index) => `<circle data-point="${index}" ${attributes} cx="${point.x}" cy="${point.y}" r="5" stroke="${color}" stroke-width="2" fill="#0a1220" style="cursor:move"/>`).join('') : ''}</g>`;
+    }
+    if (drawing.type === 'fib') {
+      const [start, end] = drawing.points.map(point => ({ x: this.x(this.indexFor(point.time)), y: this.y(point.price), price: point.price }));
+      const left = clamp(Math.min(start.x, end.x), g.left, g.right);
+      const levels = [0, .236, .382, .5, .618, .786, 1];
+      return `<g ${attributes}>${!snapshot ? line(start.x, start.y, end.x, end.y, 'transparent', 'stroke-width="16" style="cursor:move"') : ''}
+        ${line(start.x, start.y, end.x, end.y, color, 'stroke-width="1.4" stroke-dasharray="4 3"')}
+        ${levels.map((ratio, index) => { const price = end.price + (start.price - end.price) * ratio, y = this.y(price);
+          const tone = ratio === .618 ? '#5ee0c2' : ratio === .5 ? '#9bc3ef' : '#6385af';
+          return `${line(left, y, g.right, y, tone, `stroke-width="${ratio === .618 ? 1.6 : 1}" stroke-opacity=".8"${index && index < 6 ? ' stroke-dasharray="3 4"' : ''}`)}${text(Math.max(left + 5, g.right - 100), y - 4, `${(ratio * 100).toFixed(1)}%  ${this.formatPrice(price)}`, tone, 9)}`;
+        }).join('')}
+        ${selected ? [start, end].map((point, index) => `<circle data-point="${index}" ${attributes} cx="${point.x}" cy="${point.y}" r="5" stroke="${color}" stroke-width="2" fill="#0a1220" style="cursor:move"/>`).join('') : ''}</g>`;
     }
     const x = this.x(this.indexFor(drawing.time)), y = this.y(drawing.price);
     if (drawing.type === 'horizontal') return `<g ${attributes}>${!snapshot ? line(g.left, y, g.right, y, 'transparent', 'stroke-width="15" style="cursor:ns-resize"') : ''}

@@ -2,7 +2,7 @@
 
 An interactive trading education workspace. [Open the website](https://japesh-a.github.io/Trading-App/) or [report an issue](https://github.com/japesh-a/Trading-App/issues).
 
-The learning path has 18 open lessons, 54 topic-specific diagrams, worked examples, and 180 questions. The trading workspace adds a previous-day BTC chart challenge, drawing and annotation tools, draggable stop and target levels, 24-hour bar-by-bar replay, simulated P/L, a trade journal, and a gated paper account for BTC, US500, gold, and GBP/USD. The journal shows the last ten trades and whole-history statistics and can export a CSV.
+The learning path has 18 open lessons, 54 topic-specific diagrams, worked examples, and 180 questions. The trading workspace adds a previous-day BTC chart challenge, drawing and annotation tools including Fibonacci retracement, draggable entry, stop and target levels, 24-hour bar-by-bar replay, simulated P/L, a trade journal, and an open paper account for BTC, US500, gold, and GBP/USD. The journal shows the last ten trades and whole-history statistics and can export a CSV.
 
 ## Run locally
 
@@ -16,7 +16,7 @@ Open `http://localhost:5173`. The optional server stores authenticated learning 
 
 For the AI trade review, set **both** `OPENAI_API_KEY` and `OPENAI_MODEL` on the server. The key never belongs in a browser file. For connected US500, gold and GBP/USD quotes, set `TWELVE_DATA_API_KEY`; `TWELVE_DATA_US500_SYMBOL` can override the index symbol. BTC history and quotes use Coinbase. For a separate web frontend, set `WICKLUME_ALLOWED_ORIGIN` on the server to the frontend origin and set `apiBase` in `public/runtime-config.json` to the server's HTTPS origin. The default GitHub Pages build has an empty `apiBase`, so online AI and shared rankings are not connected there.
 
-When market data is unavailable, the browser can show an explicitly labeled synthetic training feed. Those trades are local practice records and never enter verified rankings. Connected paper positions use server-managed fills; the simulation excludes spread, fees, financing, leverage, and margin. Within a replay candle, a stop is counted first if both stop and target are touched. Paper reconciliation is approximate across connection gaps.
+When market data is unavailable, the browser can show an explicitly labeled synthetic training feed. Those trades are local practice records and never enter verified rankings. Paper trading is available immediately; lessons remain available at any pace. Market orders enter at the current quote. Chosen-price entries wait until a candle or sampled quote crosses that level, and exits start on the next candle because the order of prices within a candle is unknown. An unfilled daily entry records $0 P/L; a pending paper entry can be cancelled. Connected paper positions use server-managed fills; the simulation excludes spread, fees, financing, leverage, and margin. Within a replay candle, a stop is counted first if both stop and target are touched. Paper reconciliation is approximate across connection gaps.
 
 ## Build and test
 

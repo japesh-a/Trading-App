@@ -63,7 +63,8 @@ test('sessions are authenticated, token hashes persist, and CORS/body limits app
     assert.equal(allowed.headers.get('Access-Control-Allow-Origin'), 'https://japesh-a.github.io');
     assert.equal(allowed.data.coach, false);
     assert.equal(allowed.data.paperRanked, true);
-    assert.equal(allowed.data.lessonGateVerified, true);
+    assert.equal(allowed.data.lessonGateVerified, false);
+    assert.equal(allowed.data.paperTradingOpen, true);
     assert.equal((await f.call('/session', { value: 'a'.repeat(17000) })).status, 413);
   } finally { await f.close(); }
 });
@@ -108,27 +109,20 @@ test('concurrent daily submissions produce only one result', async () => {
   } finally { await f.close(); }
 });
 
-test('paper requires verified learning, uses provider entry and exits, and isolates accounts', async () => {
+test('paper is open immediately, uses provider market entry and exits, and isolates accounts', async () => {
   const f = await fixture();
   try {
     const token = (await f.call('/session', {})).data.token;
     const other = (await f.call('/session', {})).data.token;
     const paperOrder = { side: 'buy', entry: 1, stopLoss: 95, takeProfit: 110, quantity: 2 };
-    assert.equal((await f.call('/paper/open', { symbol: 'BTC', order: paperOrder, completed: Array.from({ length: 18 }, (_, i) => i) }, token)).status, 403);
-    assert.equal((await f.call('/progress', { completed: [1, 2, 3] }, token)).status, 404);
-    assert.equal((await f.call('/answer', { id: 0, question: 1, answer: 0 }, token)).status, 409);
-    for (let id = 0; id < 18; id++) {
-      f.tick();
-      for (let question = 0; question < 10; question++) {
-        const result = await f.call('/answer', { id, question, answer: 0 }, token);
-        assert.equal(result.status, 200);
-      }
-    }
-    assert.equal((await f.call('/progress', undefined, token)).data.completed.length, 18);
-    assert.equal((await f.call('/progress', undefined, other)).data.completed.length, 0);
-    assert.equal((await f.call('/answer', { id: 0, question: 9, answer: 0 }, token)).status, 409);
     const opened = await f.call('/paper/open', { symbol: 'BTC', order: paperOrder, displayName: 'Alex' }, token);
     assert.equal(opened.status, 200);
+    assert.equal((await f.call('/progress', { completed: [1, 2, 3] }, token)).status, 404);
+    assert.equal((await f.call('/answer', { id: 0, question: 1, answer: 0 }, token)).status, 409);
+    assert.equal((await f.call('/answer', { id: 0, question: 0, answer: 0 }, token)).status, 200);
+    assert.equal((await f.call('/progress', undefined, token)).data.answers[0].length, 1);
+    assert.equal((await f.call('/progress', undefined, other)).data.completed.length, 0);
+    assert.equal((await f.call('/answer', { id: 0, question: 9, answer: 0 }, token)).status, 409);
     assert.equal(opened.data.trade.entry, 100, 'Client entry prices are not trusted');
     assert.equal(opened.data.balance, 10000);
     assert.equal(opened.data.trade.initialRisk, 10);
@@ -147,6 +141,51 @@ test('paper requires verified learning, uses provider entry and exits, and isola
     assert.equal(board.data.entries[0].pnl, 12);
     assert.equal(board.data.entries[0].count, 1);
     assert.equal((await f.call('/paper/state?symbol=BTC', undefined, other)).data.balance, 10000);
+  } finally { await f.close(); }
+});
+
+test('chosen-price paper entries wait for a quote crossing and can be cancelled', async () => {
+  const f = await fixture();
+  try {
+    const token = (await f.call('/session', {})).data.token;
+    const order = { side: 'buy', entry: 105, stopLoss: 95, takeProfit: 115, quantity: 2 };
+    const placed = await f.call('/paper/open', { symbol: 'BTC', order, entryType: 'trigger' }, token);
+    assert.equal(placed.status, 200);
+    assert.equal(placed.data.trade.status, 'pending');
+    assert.equal(placed.data.trade.entry, 105);
+    f.setPrice(103); f.tick(3000);
+    assert.equal((await f.call('/paper/state?symbol=BTC', undefined, token)).data.trade.status, 'pending');
+    f.setPrice(106); f.tick(3000);
+    const filled = await f.call('/paper/state?symbol=BTC', undefined, token);
+    assert.equal(filled.data.trade.status, 'open');
+    assert.equal(filled.data.trade.entry, 105);
+    assert.equal(filled.data.trade.unrealizedPnl, 0);
+    f.setPrice(108); f.tick(3000);
+    assert.equal((await f.call('/paper/state?symbol=BTC', undefined, token)).data.trade.unrealizedPnl, 6);
+    assert.equal((await f.call('/paper/close', {}, token)).data.trade.pnl, 6);
+    const again = await f.call('/paper/open', { symbol: 'BTC', order, entryType: 'trigger' }, token);
+    assert.equal(again.data.trade.status, 'pending');
+    const cancelled = await f.call('/paper/close', {}, token);
+    assert.equal(cancelled.data.trade.status, 'cancelled');
+    assert.equal((await f.call('/paper/state?symbol=BTC', undefined, token)).data.trade, null);
+    assert.equal((await f.call('/leaderboard?mode=paper', undefined, token)).data.entries[0].count, 1);
+  } finally { await f.close(); }
+});
+
+test('daily chosen-price entry is verified and an untouched level records no fill', async () => {
+  const f = await fixture();
+  try {
+    const token = (await f.call('/session', {})).data.token;
+    const chosen = await f.call('/daily/submit', { ...decision, entryType: 'trigger', order: { ...order, entry: 108, stopLoss: 100, takeProfit: 112, quantity: 2 } }, token);
+    assert.equal(chosen.status, 200);
+    assert.equal(chosen.data.trade.entryFilled, true);
+    assert.equal(chosen.data.trade.entry, 108);
+    const other = (await f.call('/session', {})).data.token;
+    const unfilled = await f.call('/daily/submit', { ...decision, entryType: 'trigger', order: { ...order, entry: 200, stopLoss: 190, takeProfit: 220, quantity: 2 } }, other);
+    assert.equal(unfilled.status, 200);
+    assert.equal(unfilled.data.trade.entryFilled, false);
+    assert.equal(unfilled.data.trade.pnl, 0);
+    assert.equal(unfilled.data.trade.exitReason, 'entry-not-reached');
   } finally { await f.close(); }
 });
 
