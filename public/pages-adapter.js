@@ -4,6 +4,7 @@
   if (!window.__WICKLUME_STATIC__) return;
   const originalFetch = window.fetch.bind(window);
   const contentUrl = new URL('./site-data.json', document.currentScript.src);
+  contentUrl.search = new URL(document.currentScript.src).search;
   const content = originalFetch(contentUrl).then(response => {
     if (!response.ok) throw Error('Unable to load lessons');
     return response.json();

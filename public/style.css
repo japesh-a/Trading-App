@@ -28,6 +28,16 @@ button:focus-visible,a:focus-visible{outline-color:var(--lime)}
 .progress-track{background:#252d20}
 .workspace-label,.date-tag,footer{color:#a9b8a1}
 
+.lesson-visual{margin:24px 0 30px;border:1px solid #3b543a;border-radius:14px;overflow:hidden;background:#101b13}
+.visual-title{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:15px 20px;border-bottom:1px solid #2c402e;color:#edf4ee;font-size:13px;font-weight:700}
+.visual-title span{color:#94aa89;font-size:9px;letter-spacing:1.3px;font-weight:600}
+.lesson-visual svg{display:block;width:100%;height:auto;min-height:245px;background:linear-gradient(160deg,#101c15,#0a120f)}
+.lesson-visual figcaption{padding:12px 20px;border-top:1px solid #2c402e;color:#a9bba8;font-size:11px;line-height:1.6}
+.lesson-body{font-size:15px;line-height:1.85}
+.worked-example{margin:24px 0;padding:22px 24px;border:1px solid #496342;border-radius:11px;background:#17251a}
+.worked-example .eyebrow{color:var(--lime);font-size:10px}
+.worked-example p{margin:10px 0 0;color:#e0ebdd;font-size:14px;line-height:1.85}
+
 .diagram-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .diagram-pair .lesson-illustration{min-width:0;margin:20px 0}
 .diagram-pair svg{width:100%;max-width:320px}
@@ -39,3 +49,4 @@ button:focus-visible,a:focus-visible{outline-color:var(--lime)}
 .completion-card h2{margin:12px 0}
 .completion-card .btn{margin-top:8px}
 @media(max-width:700px){.diagram-pair{grid-template-columns:1fr}.diagram-pair .lesson-illustration{margin:6px 0;height:190px}.slide-actions{flex-wrap:wrap}.completion-card .btn{margin-left:0!important}}
+@media(max-width:700px){.visual-title{flex-wrap:wrap}.lesson-visual svg{min-height:180px}.worked-example{padding:18px}}

@@ -7,7 +7,7 @@ import { series } from './scenarios.mjs';
 const root = fileURLToPath(new URL('.', import.meta.url));
 const output = path.join(root, 'dist');
 mkdirSync(output, { recursive: true });
-for (const file of ['app.js', 'style.css', 'pages-adapter.js']) {
+for (const file of ['app.js', 'style.css', 'pages-adapter.js', 'lesson-visuals.js']) {
   copyFileSync(path.join(root, 'public', file), path.join(output, file));
 }
 const source = readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
@@ -15,7 +15,7 @@ const html = source
   .replace('href="/style.css"', 'href="./style.css"')
   .replace('Built for better decisions.<span>', 'Built for better decisions. <a href="https://github.com/japesh-a/Trading-App/issues" target="_blank" rel="noopener noreferrer">Share feedback on GitHub ↗</a><span>')
   .replace('<script type="module" src="/app.js"></script>',
-    '<script>window.__WICKLUME_STATIC__=true</script><script src="./pages-adapter.js?v=all-lessons"></script><script type="module" src="./app.js?v=all-lessons"></script>');
+    '<script>window.__WICKLUME_STATIC__=true</script><script src="./pages-adapter.js?v=lesson-depth"></script><script type="module" src="./app.js?v=lesson-depth"></script>');
 if (html === source || !html.includes('__WICKLUME_STATIC__')) throw Error('Static HTML transformation failed');
 writeFileSync(path.join(output, 'index.html'), html);
 writeFileSync(path.join(output, 'site-data.json'), JSON.stringify({

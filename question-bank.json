@@ -1,0 +1,1118 @@
+[
+  [
+    [
+      "What does OHLC stand for?",
+      "Open, high, low, close",
+      "Order, height, limit, close",
+      "Open, hold, low, chart"
+    ],
+    [
+      "What connects the open and close?",
+      "The body",
+      "The upper wick",
+      "The time axis"
+    ],
+    [
+      "What marks the highest price?",
+      "The top of the upper wick",
+      "The top of every body",
+      "The previous close"
+    ],
+    [
+      "Where is the open on a bearish body?",
+      "At the top",
+      "At the bottom",
+      "At the wick tip"
+    ],
+    [
+      "Where is the close on a bullish body?",
+      "At the top",
+      "At the bottom",
+      "At the low"
+    ],
+    [
+      "What does the lower wick reach?",
+      "The period low",
+      "The previous open",
+      "The next close"
+    ],
+    [
+      "Can a candle lack a visible upper wick?",
+      "Yes, if the high is at the body top",
+      "No, every candle has both wicks",
+      "Only on a daily chart"
+    ],
+    [
+      "What determines a candle’s period?",
+      "The chart timeframe",
+      "The body height",
+      "The candle colour"
+    ],
+    [
+      "Does a green candle prove the next one rises?",
+      "No, it only describes its own period",
+      "Yes, green predicts green",
+      "Only if it has no wick"
+    ],
+    [
+      "What should accompany a candle reading?",
+      "Its surrounding chart context",
+      "Only its colour",
+      "The future candles"
+    ]
+  ],
+  [
+    [
+      "A bearish candle closes where?",
+      "Below its open",
+      "Above its open",
+      "Exactly at its high"
+    ],
+    [
+      "The top of a red body is usually the…",
+      "Open",
+      "Close",
+      "Low"
+    ],
+    [
+      "The bottom of a red body is the…",
+      "Close",
+      "High",
+      "Open"
+    ],
+    [
+      "A long red body shows…",
+      "A large open-to-close fall",
+      "High volume for certain",
+      "A guaranteed downtrend"
+    ],
+    [
+      "A long lower wick on a red candle shows…",
+      "Price recovered from a lower point",
+      "Price never went below the close",
+      "The next candle must be green"
+    ],
+    [
+      "Can a red candle appear in an uptrend?",
+      "Yes",
+      "No",
+      "Only on weekly charts"
+    ],
+    [
+      "Does a red candle show every intraperiod move?",
+      "No, it summarises four prices",
+      "Yes, the body traces all trades",
+      "Only when no wick appears"
+    ],
+    [
+      "What does a missing lower wick suggest?",
+      "The close may equal the low",
+      "There was no opening price",
+      "The high was not recorded"
+    ],
+    [
+      "Is every bearish candle a sell signal?",
+      "No",
+      "Yes",
+      "Only a large one"
+    ],
+    [
+      "What helps interpret repeated red candles?",
+      "Swing structure and nearby levels",
+      "Colour alone",
+      "The candle number"
+    ]
+  ],
+  [
+    [
+      "A large body measures…",
+      "Open-to-close distance",
+      "Trading volume",
+      "Time until the next candle"
+    ],
+    [
+      "A long upper wick shows…",
+      "Price visited a higher level then retreated",
+      "Price must fall next",
+      "No trades occurred near the high"
+    ],
+    [
+      "A small body means…",
+      "Open and close are near each other",
+      "There was no volatility",
+      "The market is closed"
+    ],
+    [
+      "Why compare recent candles?",
+      "To judge relative size",
+      "To predict an exact target",
+      "To remove the need for risk limits"
+    ],
+    [
+      "Can a small body have long wicks?",
+      "Yes",
+      "No",
+      "Only on one-hour charts"
+    ],
+    [
+      "Does a wick prove a reversal?",
+      "No",
+      "Yes",
+      "Only if coloured red"
+    ],
+    [
+      "What does a long lower wick show?",
+      "Price traded lower and returned",
+      "Price never fell",
+      "The close is always the high"
+    ],
+    [
+      "Which part marks the whole traded range?",
+      "High-to-low including wicks",
+      "The body alone",
+      "The close alone"
+    ],
+    [
+      "What might a tiny body after a fast move suggest?",
+      "A pause or indecision",
+      "A guaranteed turn",
+      "A missing price"
+    ],
+    [
+      "What best confirms a wick interpretation?",
+      "Subsequent price action and context",
+      "Wick colour alone",
+      "A larger font on the chart"
+    ]
+  ],
+  [
+    [
+      "A 15-minute candle covers…",
+      "15 minutes of price action",
+      "15 trades",
+      "15 price units"
+    ],
+    [
+      "A daily candle covers…",
+      "One trading day or session",
+      "One hour",
+      "One month"
+    ],
+    [
+      "Can a short rise exist inside a longer decline?",
+      "Yes",
+      "No",
+      "Only in synthetic data"
+    ],
+    [
+      "Why check a broader timeframe?",
+      "To understand larger structure",
+      "To guarantee the next move",
+      "To remove all uncertainty"
+    ],
+    [
+      "What can chart zoom change?",
+      "How dramatic a move looks",
+      "The recorded OHLC",
+      "The market’s actual orders"
+    ],
+    [
+      "Should body sizes across different timeframes be compared directly?",
+      "Usually no",
+      "Always yes",
+      "Only if both are green"
+    ],
+    [
+      "What is a timeframe?",
+      "The period represented by each candle",
+      "The current price",
+      "The number of traders"
+    ],
+    [
+      "Does a 1-minute pattern override daily structure automatically?",
+      "No",
+      "Yes",
+      "Only on Fridays"
+    ],
+    [
+      "What remains useful across timeframes?",
+      "Open, high, low and close",
+      "A guaranteed signal",
+      "The exact same volatility"
+    ],
+    [
+      "What prevents misleading visual comparisons?",
+      "Checking timeframe and scale",
+      "Ignoring the axis",
+      "Looking only at colour"
+    ]
+  ],
+  [
+    [
+      "A swing high is…",
+      "A local peak",
+      "Every green candle",
+      "The chart’s opening price"
+    ],
+    [
+      "A swing low is…",
+      "A local trough",
+      "Every red candle",
+      "The newest close"
+    ],
+    [
+      "An uptrend often forms…",
+      "Higher highs and higher lows",
+      "Only green candles",
+      "Equal closes"
+    ],
+    [
+      "A downtrend often forms…",
+      "Lower highs and lower lows",
+      "Only long wicks",
+      "No pullbacks"
+    ],
+    [
+      "A mixed swing sequence may suggest…",
+      "A range or transition",
+      "A certain breakout",
+      "Invalid market data"
+    ],
+    [
+      "Why inspect neighbouring prices?",
+      "A swing is relative to its surroundings",
+      "It changes the OHLC",
+      "It guarantees a reversal"
+    ],
+    [
+      "Does one lower low prove a lasting downtrend?",
+      "No",
+      "Yes",
+      "Only on a daily chart"
+    ],
+    [
+      "What is a higher low?",
+      "A trough above the previous trough",
+      "A high above the previous high",
+      "A green candle"
+    ],
+    [
+      "Which clue challenges an uptrend?",
+      "A break below an important prior swing low",
+      "Any red candle",
+      "A short upper wick"
+    ],
+    [
+      "What should accompany a structure idea?",
+      "A level that would invalidate it",
+      "A guaranteed target",
+      "Only a colour label"
+    ]
+  ],
+  [
+    [
+      "Support describes…",
+      "An area where declines previously paused",
+      "A guaranteed minimum price",
+      "An order type"
+    ],
+    [
+      "Why draw a zone?",
+      "Reactions span a range of prices",
+      "Exact prices are illegal",
+      "Zones cannot break"
+    ],
+    [
+      "Does prior support guarantee a bounce?",
+      "No",
+      "Yes",
+      "Only with a green candle"
+    ],
+    [
+      "Repeated tests of a zone provide…",
+      "More observed reactions, not certainty",
+      "A guaranteed reversal",
+      "A fixed profit target"
+    ],
+    [
+      "What might weaken a support thesis?",
+      "Sustained trading below the zone",
+      "A small wick above it",
+      "A new chart colour"
+    ],
+    [
+      "Is support based on past or future action?",
+      "Past action",
+      "Future prices",
+      "Broker settings"
+    ],
+    [
+      "What changes a zone’s useful width?",
+      "Typical price variation",
+      "The site font",
+      "The number of tabs open"
+    ],
+    [
+      "What is an invalidation point?",
+      "Where the trade idea no longer fits",
+      "Where profit is guaranteed",
+      "The next candle high"
+    ],
+    [
+      "Can former support become resistance?",
+      "Yes, sometimes",
+      "Never",
+      "Only on one-minute charts"
+    ],
+    [
+      "Best use of a support zone?",
+      "One piece of evidence in a plan",
+      "An automatic buy order",
+      "Proof of a bottom"
+    ]
+  ],
+  [
+    [
+      "Resistance describes…",
+      "An area where rises previously stalled",
+      "A guaranteed maximum price",
+      "A stop-loss order"
+    ],
+    [
+      "Is resistance an exact line?",
+      "Usually better treated as a zone",
+      "Always one exact price",
+      "Always the session high"
+    ],
+    [
+      "What may challenge a resistance idea?",
+      "Sustained closes above the zone",
+      "One small red candle",
+      "A long lower wick far away"
+    ],
+    [
+      "Do repeated reactions guarantee another rejection?",
+      "No",
+      "Yes",
+      "Only on daily charts"
+    ],
+    [
+      "What is a retest?",
+      "Price returns to a previously important area",
+      "Price repeats the same candle exactly",
+      "A reset of the app"
+    ],
+    [
+      "Can broken resistance later act as support?",
+      "Yes, sometimes",
+      "No",
+      "Only with a news event"
+    ],
+    [
+      "What should you compare at repeated tests?",
+      "Reaction strength and closes",
+      "The chart background",
+      "Only candle count"
+    ],
+    [
+      "What is resistance based on?",
+      "Observed past reactions",
+      "Guaranteed future supply",
+      "A fixed exchange rule"
+    ],
+    [
+      "A close above resistance is…",
+      "Evidence to reassess the zone",
+      "Proof that price cannot fall",
+      "The end of all risk"
+    ],
+    [
+      "Best use of a resistance zone?",
+      "Part of a wider decision process",
+      "An automatic sell signal",
+      "A certain target"
+    ]
+  ],
+  [
+    [
+      "A breakout is price moving…",
+      "Beyond a watched range or zone",
+      "Exactly to its prior close",
+      "Only within a range"
+    ],
+    [
+      "Is a wick through a zone always a breakout?",
+      "No",
+      "Yes",
+      "Only if red"
+    ],
+    [
+      "What strengthens breakout evidence?",
+      "Closing and holding beyond the zone",
+      "A taller screen",
+      "One isolated spike"
+    ],
+    [
+      "What is follow-through?",
+      "Continued action in the breakout direction",
+      "A colour change",
+      "The size of the toolbar"
+    ],
+    [
+      "Can a breakout fail?",
+      "Yes",
+      "No",
+      "Only in synthetic charts"
+    ],
+    [
+      "Why can chasing be risky?",
+      "Entry may be far from invalidation",
+      "It always loses",
+      "It removes price data"
+    ],
+    [
+      "What should be marked before action?",
+      "Invalidation and risk",
+      "A guaranteed target",
+      "A lucky candle"
+    ],
+    [
+      "Can waiting after a breakout be reasonable?",
+      "Yes",
+      "No",
+      "Only for beginners"
+    ],
+    [
+      "What may a retest show?",
+      "Whether the old zone holds from the other side",
+      "An exact future outcome",
+      "Missing OHLC"
+    ],
+    [
+      "Which is evidence, not certainty?",
+      "A close beyond resistance",
+      "A guaranteed upward move",
+      "A promise of profit"
+    ]
+  ],
+  [
+    [
+      "A false break moves beyond a level then…",
+      "Returns inside the prior area",
+      "Continues forever",
+      "Deletes earlier candles"
+    ],
+    [
+      "What can a wick beyond resistance followed by a close inside suggest?",
+      "The move did not hold through that close",
+      "Guaranteed reversal",
+      "Missing volume"
+    ],
+    [
+      "Can a close outside later fail?",
+      "Yes",
+      "No",
+      "Only on a daily chart"
+    ],
+    [
+      "Why avoid acting on one spike?",
+      "It may not hold",
+      "Spikes have no high price",
+      "All spikes are fake"
+    ],
+    [
+      "What becomes a useful reference after a failed break?",
+      "The failed range edge",
+      "The site logo",
+      "The candle count alone"
+    ],
+    [
+      "Does a false break require immediate reversal trading?",
+      "No",
+      "Yes",
+      "Only when green"
+    ],
+    [
+      "What is the prior range?",
+      "The area price traded before the break",
+      "The next day’s high",
+      "The broker spread"
+    ],
+    [
+      "What should be reassessed after price returns inside?",
+      "The original breakout idea",
+      "The colour theme",
+      "The OHLC definition"
+    ],
+    [
+      "Can false breaks occur at support?",
+      "Yes",
+      "No",
+      "Only at resistance"
+    ],
+    [
+      "What is the best response to conflicting evidence?",
+      "Pause and update the plan",
+      "Ignore the close",
+      "Assume the first idea must win"
+    ]
+  ],
+  [
+    [
+      "Volume measures…",
+      "Trading activity during a period",
+      "The next price",
+      "The body height"
+    ],
+    [
+      "High volume relative to recent bars indicates…",
+      "Unusually high participation",
+      "Guaranteed continuation",
+      "Only buying"
+    ],
+    [
+      "Does every trade have a buyer and seller?",
+      "Yes",
+      "No",
+      "Only in equities"
+    ],
+    [
+      "Can volume alone predict direction?",
+      "No",
+      "Yes",
+      "Only when it doubles"
+    ],
+    [
+      "Where are volume bars commonly shown?",
+      "Beneath the price chart",
+      "Inside the account menu",
+      "At the wick tip"
+    ],
+    [
+      "What is tick volume?",
+      "A count of price updates",
+      "All traded units globally",
+      "The distance between open and close"
+    ],
+    [
+      "Why check the data source?",
+      "Volume definitions differ by market and feed",
+      "It changes candle colour",
+      "It guarantees accuracy"
+    ],
+    [
+      "What is a sensible comparison?",
+      "Current volume versus recent similar periods",
+      "Today’s volume versus font size",
+      "Only green bars"
+    ],
+    [
+      "Can a high-volume candle have a small body?",
+      "Yes",
+      "No",
+      "Only in forex"
+    ],
+    [
+      "How should volume be used?",
+      "As context alongside price structure",
+      "As a guaranteed signal",
+      "As a substitute for risk planning"
+    ]
+  ],
+  [
+    [
+      "Volatility describes…",
+      "How much price varies",
+      "Guaranteed direction",
+      "Trading hours only"
+    ],
+    [
+      "Candle range is…",
+      "High minus low",
+      "Close minus open only",
+      "Volume divided by price"
+    ],
+    [
+      "Why compare several candles?",
+      "To estimate typical movement",
+      "To guarantee a reversal",
+      "To hide outliers"
+    ],
+    [
+      "A wide candle is always typical?",
+      "No",
+      "Yes",
+      "Only if red"
+    ],
+    [
+      "A stop inside normal noise may…",
+      "Be hit without disproving the idea",
+      "Always protect profit",
+      "Never trigger"
+    ],
+    [
+      "If a stop must be wider for the same monetary risk, size should…",
+      "Usually be smaller",
+      "Always be larger",
+      "Stay fixed regardless"
+    ],
+    [
+      "Can volatility change over time?",
+      "Yes",
+      "No",
+      "Only at year end"
+    ],
+    [
+      "Does high volatility imply an uptrend?",
+      "No",
+      "Yes",
+      "Only on daily charts"
+    ],
+    [
+      "What does a quiet market often show?",
+      "Smaller recent ranges",
+      "Guaranteed safety",
+      "No risk"
+    ],
+    [
+      "Which is a better risk reference?",
+      "Observed movement plus an invalidation level",
+      "An arbitrary fixed distance",
+      "The colour of the last candle"
+    ]
+  ],
+  [
+    [
+      "A market order prioritises…",
+      "Speed of execution",
+      "An exact guaranteed price",
+      "No transaction costs"
+    ],
+    [
+      "A limit order sets…",
+      "A price boundary",
+      "A guaranteed fill",
+      "A stop distance"
+    ],
+    [
+      "Can a limit order remain unfilled?",
+      "Yes",
+      "No",
+      "Only when bearish"
+    ],
+    [
+      "A stop order activates when…",
+      "Its trigger is reached",
+      "The user earns XP",
+      "Volume disappears"
+    ],
+    [
+      "What is slippage?",
+      "A fill different from the expected trigger price",
+      "A longer wick",
+      "An account password error"
+    ],
+    [
+      "What is the spread?",
+      "Difference between bid and ask",
+      "High minus low",
+      "Daily profit"
+    ],
+    [
+      "Can fees change a small trade’s outcome?",
+      "Yes",
+      "No",
+      "Only on monthly charts"
+    ],
+    [
+      "Does a stop price guarantee that exact fill?",
+      "No",
+      "Yes",
+      "Only for buys"
+    ],
+    [
+      "What should a simulation include?",
+      "Spread, fees and realistic fills",
+      "Only the last close",
+      "Guaranteed best price"
+    ],
+    [
+      "Which order can control price but not guarantee execution?",
+      "Limit order",
+      "Market order",
+      "Every order equally"
+    ]
+  ],
+  [
+    [
+      "An invalidation level marks…",
+      "Where the original idea no longer fits",
+      "A guaranteed profit point",
+      "The next candle open"
+    ],
+    [
+      "Risk should be considered…",
+      "Before entering",
+      "Only after a loss",
+      "Only when trading ends"
+    ],
+    [
+      "Can a planned trade lose?",
+      "Yes",
+      "No",
+      "Only if bearish"
+    ],
+    [
+      "Can a poor decision make money?",
+      "Yes",
+      "No",
+      "Only in simulations"
+    ],
+    [
+      "A stop may fill beyond its trigger because of…",
+      "Slippage",
+      "A red label",
+      "The lesson order"
+    ],
+    [
+      "A risk budget is…",
+      "The amount set aside as acceptable potential loss",
+      "Guaranteed maximum profit",
+      "The full account balance"
+    ],
+    [
+      "Which is a process measure?",
+      "Was invalidation defined in advance?",
+      "Did the last candle turn green?",
+      "Was the outcome lucky?"
+    ],
+    [
+      "Does a good outcome prove a good plan?",
+      "No",
+      "Yes",
+      "Only with high volume"
+    ],
+    [
+      "What belongs in a pre-entry plan?",
+      "Entry, invalidation and size",
+      "Only a target",
+      "Only a colour signal"
+    ],
+    [
+      "What should a loss trigger in review?",
+      "Check reasoning and execution",
+      "Assume the idea was always foolish",
+      "Double size automatically"
+    ]
+  ],
+  [
+    [
+      "Basic position size equals…",
+      "Risk budget divided by risk per unit",
+      "Risk budget times entry price",
+      "Profit target divided by volume"
+    ],
+    [
+      "£50 risk and £2 per unit implies…",
+      "25 units",
+      "100 units",
+      "2 units"
+    ],
+    [
+      "If stop distance doubles and budget stays fixed, size should…",
+      "Halve",
+      "Double",
+      "Stay the same"
+    ],
+    [
+      "What is risk per unit?",
+      "Entry-to-invalidation distance adjusted for contract value",
+      "Account password length",
+      "The previous candle body"
+    ],
+    [
+      "Why consider contract multipliers?",
+      "They change money risk per price unit",
+      "They change candle colour",
+      "They guarantee liquidity"
+    ],
+    [
+      "Do fees affect the risk calculation?",
+      "Yes",
+      "No",
+      "Only for short trades"
+    ],
+    [
+      "A fixed position size with a wider stop risks…",
+      "More money",
+      "Less money",
+      "Exactly the same"
+    ],
+    [
+      "Should size be calculated before entry?",
+      "Yes",
+      "No",
+      "Only after profit"
+    ],
+    [
+      "Can minimum lot sizes prevent an exact planned size?",
+      "Yes",
+      "No",
+      "Only on charts without volume"
+    ],
+    [
+      "What is the safer response if the minimum size exceeds your risk limit?",
+      "Skip or find a suitable instrument",
+      "Raise the risk limit automatically",
+      "Ignore the stop"
+    ]
+  ],
+  [
+    [
+      "A £4 target and £2 stop gives…",
+      "2:1 reward to risk",
+      "1:2 reward to risk",
+      "4:1 reward to risk"
+    ],
+    [
+      "The ratio compares…",
+      "Planned reward distance with risk distance",
+      "Volume with volatility",
+      "Green candles with red"
+    ],
+    [
+      "Does a 3:1 target guarantee profit?",
+      "No",
+      "Yes",
+      "Only with a stop"
+    ],
+    [
+      "Why might a distant target be less useful?",
+      "It may be less likely to be reached",
+      "It changes the open",
+      "It removes costs"
+    ],
+    [
+      "Should a target be moved only to improve the ratio?",
+      "No",
+      "Yes",
+      "Only after entry"
+    ],
+    [
+      "What can influence target placement?",
+      "Nearby structure and tested rules",
+      "Only the desired ratio",
+      "The site accent colour"
+    ],
+    [
+      "Are costs part of practical reward-to-risk?",
+      "Yes",
+      "No",
+      "Only if the trade loses"
+    ],
+    [
+      "If risk distance doubles while target stays fixed, ratio…",
+      "Falls",
+      "Rises",
+      "Stays equal"
+    ],
+    [
+      "Can a smaller ratio still be viable?",
+      "Possibly, depending on outcomes and costs",
+      "Never",
+      "Only with no stop"
+    ],
+    [
+      "What else is needed beyond a ratio?",
+      "Outcome frequencies and consistent execution",
+      "A brighter chart",
+      "A guaranteed forecast"
+    ]
+  ],
+  [
+    [
+      "A plan should include…",
+      "Setup, trigger, invalidation, size and exit",
+      "Only a hoped-for target",
+      "Only market colour"
+    ],
+    [
+      "Why write rules before action?",
+      "To make decisions reviewable",
+      "To guarantee profit",
+      "To avoid all losses"
+    ],
+    [
+      "Is no trade a valid planned outcome?",
+      "Yes",
+      "No",
+      "Only in a downtrend"
+    ],
+    [
+      "What makes a rule testable?",
+      "Observable conditions",
+      "Vague confidence",
+      "A lucky result"
+    ],
+    [
+      "Which rule is more precise?",
+      "Close above a named swing high",
+      "Trade when it feels right",
+      "Buy all green candles"
+    ],
+    [
+      "What might block a trade?",
+      "Risk exceeding the preset limit",
+      "The chart being dark green",
+      "Having finished a lesson"
+    ],
+    [
+      "Should a plan be revised using evidence?",
+      "Yes",
+      "Never",
+      "Only after wins"
+    ],
+    [
+      "What is an entry trigger?",
+      "A specified condition for acting",
+      "A guaranteed fill",
+      "A level of XP"
+    ],
+    [
+      "How does an exit rule help?",
+      "It defines how to respond after entry",
+      "It predicts every move",
+      "It removes fees"
+    ],
+    [
+      "What is useful when reviewing a plan?",
+      "Compare actual decisions with written rules",
+      "Judge by profit alone",
+      "Change the rule after every candle"
+    ]
+  ],
+  [
+    [
+      "What should a journal capture?",
+      "The setup and decision as they appeared then",
+      "Only winning trades",
+      "Only final balance"
+    ],
+    [
+      "Why preserve the original chart view?",
+      "To review what was knowable at the time",
+      "To predict the future",
+      "To remove fees"
+    ],
+    [
+      "Which is a useful tag?",
+      "Breakout",
+      "Lucky day only",
+      "Perfect outcome"
+    ],
+    [
+      "When should an entry reason be recorded?",
+      "Before or at the decision",
+      "Only after seeing the result",
+      "Only at month end"
+    ],
+    [
+      "Should losing trades be journalled?",
+      "Yes",
+      "No",
+      "Only large ones"
+    ],
+    [
+      "What can repeated tags reveal?",
+      "Patterns in decisions and results",
+      "Guaranteed future profits",
+      "A new OHLC value"
+    ],
+    [
+      "What is hindsight bias?",
+      "Treating an outcome as obvious after it happens",
+      "Recording a stop beforehand",
+      "Using a timeframe"
+    ],
+    [
+      "What is a process question?",
+      "Did I follow my stated rule?",
+      "Was my candle green?",
+      "Did I get lucky?"
+    ],
+    [
+      "Why review a batch of decisions?",
+      "Repeated patterns are clearer than one outcome",
+      "One result is always enough",
+      "It removes uncertainty"
+    ],
+    [
+      "What is a useful next step after spotting a recurring mistake?",
+      "Change one specific rule or habit and track it",
+      "Double every position",
+      "Delete the losing records"
+    ]
+  ],
+  [
+    [
+      "FOMO stands for…",
+      "Fear of missing out",
+      "Forecast of market orders",
+      "Frequency of moving opens"
+    ],
+    [
+      "What can FOMO encourage?",
+      "A late unplanned entry",
+      "A guaranteed better price",
+      "A lower spread"
+    ],
+    [
+      "Confirmation bias favours…",
+      "Evidence that supports an existing belief",
+      "All evidence equally",
+      "Only volume data"
+    ],
+    [
+      "What question challenges confirmation bias?",
+      "What would prove my idea wrong?",
+      "How can I ignore the stop?",
+      "Why must I be right?"
+    ],
+    [
+      "Is missing one move the same as losing money?",
+      "No",
+      "Yes",
+      "Only in a downtrend"
+    ],
+    [
+      "After a loss, what can help?",
+      "Pause and check the written plan",
+      "Double size automatically",
+      "Chase the next candle"
+    ],
+    [
+      "After a win, can overconfidence appear?",
+      "Yes",
+      "No",
+      "Only with leverage"
+    ],
+    [
+      "What is a checklist for?",
+      "Consistent decision steps",
+      "Guaranteed outcomes",
+      "Changing the chart colour"
+    ],
+    [
+      "When is no trade a strong decision?",
+      "When the setup or risk does not fit the plan",
+      "Never",
+      "Only after three red candles"
+    ],
+    [
+      "How can patience be assessed?",
+      "Record whether you followed your conditions",
+      "Count only wins",
+      "Ignore skipped trades"
+    ]
+  ]
+]

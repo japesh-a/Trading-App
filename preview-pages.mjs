@@ -6,6 +6,7 @@ import path from 'node:path';
 const root = fileURLToPath(new URL('./dist/', import.meta.url));
 const files = new Map([
   ['/', 'index.html'], ['/index.html', 'index.html'], ['/app.js', 'app.js'],
+  ['/lesson-visuals.js', 'lesson-visuals.js'],
   ['/style.css', 'style.css'], ['/pages-adapter.js', 'pages-adapter.js'],
   ['/site-data.json', 'site-data.json']
 ]);

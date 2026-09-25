@@ -15,6 +15,6 @@ Thanks for helping improve Wicklume. Small changes are welcome.
 3. Run `npm test` if you changed lessons, quiz behaviour, or the server.
 4. Open a Pull Request and describe what changed and how you checked it.
 
-The interface lives in `public/`. Lesson slides and questions live in `curriculum.mjs`. The local server and progress API live in `server.mjs`. Please keep lessons focused and give each lesson three concise slides and at least ten useful questions. Avoid questions that imply a chart pattern guarantees a future outcome.
+The interface lives in `public/`. Lesson slides live in `lesson-content.mjs`, worked examples in `lesson-notes.mjs`, diagrams in `public/lesson-visuals.js`, and questions in `question-bank.json`. `curriculum.mjs` assembles them. The local server and progress API live in `server.mjs`. Keep explanations concrete and give each lesson three illustrated slides and at least ten useful questions. Avoid questions that imply a chart pattern guarantees a future outcome.
 
 Do not commit `data/`, which contains local learner progress, or any `.env` file with secrets.

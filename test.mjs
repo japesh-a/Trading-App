@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
+import { lessonVisual } from './public/lesson-visuals.js';
 
 const port=5187,base=`http://127.0.0.1:${port}`;
 const child=spawn(process.execPath,['server.mjs'],{cwd:import.meta.dirname,env:{...process.env,WICKLUME_PORT:String(port),WICKLUME_DB:':memory:'},stdio:'ignore'});
@@ -12,6 +13,14 @@ try{
  const course=await call('/api/lessons');
  assert.equal(course.data.length,18);
  assert(course.data.every(lesson=>lesson.slides.length===3&&lesson.questions.length===10));
+ assert(course.data.every(lesson=>lesson.notes.length===3&&lesson.notes.every(note=>note.length>150)));
+ const visualTitles=new Set();
+ for(let id=0;id<18;id++)for(let slide=0;slide<3;slide++){
+  const diagram=lessonVisual(id,slide);
+  assert(diagram.includes('<svg')&&diagram.includes('<figcaption>'),`Diagram ${id+1}.${slide+1}`);
+  if(slide===0)visualTitles.add(diagram.match(/class="visual-title">([^<]+)/)[1]);
+ }
+ assert.equal(visualTitles.size,18,'Every lesson should have a distinct diagram subject');
  const laterLesson=await call('/api/answer',{id:17,question:0,answer:0});
  assert.equal(laterLesson.status,200,'Any lesson should be available from the start');
  assert.deepEqual(laterLesson.data.progress.completed,[],'Opening a lesson does not complete it');
@@ -31,5 +40,6 @@ try{
  assert.equal(chart.data.candles.length,23);
  const frontend=await (await fetch(base+'/app.js')).text();
  assert(frontend.includes('fill="#ff6b78"'));
- console.log('PASS: 18 lessons, 180 ordered questions, ten-question completion, no duplicate scoring, red hero candle, hidden chart future.');
+ assert.equal((await fetch(base+'/lesson-visuals.js')).status,200);
+ console.log('PASS: 18 detailed lessons, 54 lesson diagrams, 180 ordered questions, completion and chart practice.');
 }finally{child.kill()}
