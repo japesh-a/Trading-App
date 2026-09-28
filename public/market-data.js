@@ -1,25 +1,43 @@
 import { TIMEFRAMES, aggregateCandles } from './timeframes.js';
 
 const DAY=86400;
-let runtime;
+let runtime, runtimeRequest, sessionRequest, guestToken, signedIn=false;
+export function setServiceAccount(account){signedIn=Boolean(account);}
 export async function serviceConfig(){
   if(runtime)return runtime;
-  try{const r=await fetch(new URL('./runtime-config.json',import.meta.url));runtime=r.ok?await r.json():{};}catch{runtime={};}
-  if(typeof window!=='undefined'&&!window.__WICKLUME_STATIC__&&!runtime.apiBase)runtime.apiBase=location.origin;
-  runtime.apiBase=String(runtime.apiBase||'').replace(/\/$/,'');
-  return runtime;
+  if(!runtimeRequest)runtimeRequest=(async()=>{
+    let config;
+    try{const r=await fetch(new URL('./runtime-config.json',import.meta.url),{signal:AbortSignal.timeout(8000)});config=r.ok?await r.json():{};}catch{config={};}
+    if(!config||typeof config!=='object'||Array.isArray(config))config={};
+    if(typeof window!=='undefined'&&!window.__WICKLUME_STATIC__&&!config.apiBase)config.apiBase=location.origin;
+    config.apiBase=String(config.apiBase||'').replace(/\/$/,'');
+    runtime=config;return runtime;
+  })();
+  return runtimeRequest;
 }
-export async function requestService(path,body){
-  const config=await serviceConfig();
-  if(!config.apiBase)throw Error('The online service is not connected yet.');
-  let token=localStorage.getItem('wicklume-service-token');
-  if(!token){
+async function guestSession(config){
+  if(!guestToken)try{guestToken=localStorage.getItem('wicklume-service-token');}catch{/* Continue with an in-memory session when storage is blocked. */}
+  if(guestToken)return guestToken;
+  if(!sessionRequest)sessionRequest=(async()=>{
     const r=await fetch(config.apiBase+'/api/trading/session',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(12000)});
     const value=await r.json();if(!r.ok)throw Error(value.error||'Unable to connect');
-    token=value.token;localStorage.setItem('wicklume-service-token',token);
+    guestToken=value.token;
+    try{localStorage.setItem('wicklume-service-token',guestToken);}catch{/* Retain this tab's session. */}
+    return guestToken;
+  })().finally(()=>{sessionRequest=null;});
+  return sessionRequest;
+}
+export async function requestService(path,body,retried=false){
+  const config=await serviceConfig();
+  if(!config.apiBase)throw Error('The online service is not connected yet.');
+  const token=signedIn||path==='/config'?null:await guestSession(config);
+  const r=await fetch(config.apiBase+'/api/trading'+path,{method:body?'POST':'GET',credentials:'include',headers:{'Content-Type':'application/json',...(token?{'Authorization':'Bearer '+token}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(path==='/coach'?35000:15000)});
+  const value=await r.json();
+  if(r.status===401&&!signedIn&&!retried&&/^(This session has expired|Connect your learning session)/.test(value.error||'')){
+    if(guestToken===token){guestToken=null;try{localStorage.removeItem('wicklume-service-token');}catch{/* Renew the in-memory session. */}}
+    return requestService(path,body,true);
   }
-  const r=await fetch(config.apiBase+'/api/trading'+path,{method:body?'POST':'GET',credentials:'include',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(path==='/coach'?35000:15000)});
-  const value=await r.json();if(!r.ok)throw Error(value.error||'Online service unavailable');return value;
+  if(!r.ok)throw Error(value.error||'Online service unavailable');return value;
 }
 export function utcDay(now=Date.now()){return new Date(now).toISOString().slice(0,10);}
 function random(seed){let n=[...seed].reduce((a,c)=>(a*31+c.charCodeAt(0))>>>0,7);return()=>{n=(Math.imul(n,1664525)+1013904223)>>>0;return n/4294967296;};}
@@ -50,6 +68,11 @@ export async function previousDayChallenge(now=Date.now(),allowDemo=true){
   try{candles=await coinbaseCandles(start-12*3600,end);if(candles.length!==144||candles.some((c,i)=>i&&c.time-candles[i-1].time!==900))throw Error('Incomplete historical session');}
   catch(error){if(!allowDemo)throw error;demo=true;source='Synthetic training sample · market feed unavailable';candles=demoCandles('BTC',start-12*3600,144,900,day);}
   return{id:day+'-BTC-15m'+(demo?'-demo':''),day,marketDate:utcDay(start*1000),instrument:'BTC',interval:900,history:candles.slice(0,48),future:candles.slice(48),source,demo,selection:'Fixed UTC session; selected before inspecting the outcome'};
+}
+export function trainingChallenge(now=Date.now()){
+  const day=utcDay(now),end=Date.parse(day+'T00:00:00Z')/1000,start=end-DAY;
+  const candles=demoCandles('BTC',start-12*3600,144,900,day);
+  return{id:day+'-BTC-15m-demo',day,marketDate:utcDay(start*1000),instrument:'BTC',interval:900,history:candles.slice(0,48),future:candles.slice(48),source:'Synthetic training sample',demo:true,ranked:false,selection:'Synthetic candles for offline practice; excluded from verified rankings'};
 }
 export async function loadDaily(){
   const config=await serviceConfig();

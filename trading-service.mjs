@@ -90,6 +90,13 @@ export function createTradingService(db, options = {}) {
     const row = db.prepare('SELECT value FROM trading_learning WHERE session_id=?').get(sessionId);
     return row ? jsonParse(row.value) : emptyProgress();
   };
+  const markActivity = sessionId => {
+    const progress = getProgress(sessionId), day = utcDay(clock());
+    if (!progress.days.includes(day)) {
+      progress.days.push(day);
+      db.prepare('INSERT INTO trading_learning VALUES(?,?) ON CONFLICT(session_id) DO UPDATE SET value=excluded.value').run(sessionId, JSON.stringify(progress));
+    }
+  };
   const updateName = (session, displayName) => {
     if (typeof displayName === 'string') {
       session.display_name = name(displayName);
@@ -110,6 +117,7 @@ export function createTradingService(db, options = {}) {
       try {
         db.prepare('INSERT OR IGNORE INTO trading_paper_trades VALUES(?,?,?)').run(trade.id, sessionId, JSON.stringify(trade));
         db.prepare('DELETE FROM trading_paper_positions WHERE session_id=?').run(sessionId);
+        markActivity(sessionId);
         db.exec('COMMIT');
       } catch (error) { db.exec('ROLLBACK'); throw error; }
     } else {
@@ -304,6 +312,12 @@ export function createTradingService(db, options = {}) {
       const session = sessionFor(req);
       rateLimit(`session:${session.id}`, 180);
       if (route === '/lessons' && req.method === 'GET') return send(publicLessons());
+      if (route === '/profile' && req.method === 'POST') {
+        const body = await requestBody(req);
+        if (typeof body.displayName !== 'string' || !body.displayName.trim() || body.displayName.trim().length > 40 || /[\u0000-\u001f\u007f]/.test(body.displayName)) fail(400, 'Enter a display name between 1 and 40 characters.');
+        updateName(session, body.displayName);
+        return send({ displayName: session.display_name });
+      }
       if (route === '/progress' && req.method === 'GET') return send(getProgress(session.id));
       if (route === '/journal' && req.method === 'GET') return send({ trades: [
         ...paperTrades(session.id),
@@ -346,8 +360,9 @@ export function createTradingService(db, options = {}) {
           trade = { ...trade, ranked: true, serverVerified: true, source: challenge.source };
           for (const bar of challenge.future) trade = advanceTrade(trade, bar);
           if (trade.status === 'open' || trade.status === 'pending') { const finalBar = challenge.future.at(-1); trade = closeTrade(trade, finalBar.close, finalBar.time, 'session-end'); }
-          updateName(session, body.displayName);
+          if (!session.account_id) updateName(session, body.displayName);
           db.prepare('INSERT INTO trading_daily_results VALUES(?,?,?,?)').run(session.id, challenge.day, trade.id, JSON.stringify(trade));
+          markActivity(session.id);
           return send({ future: challenge.future, trade });
         });
       }
@@ -361,11 +376,11 @@ export function createTradingService(db, options = {}) {
         const mode = url.searchParams.get('mode') || 'daily';
         if (!['daily', 'paper'].includes(mode)) fail(400, 'Choose the daily or paper leaderboard.');
         const entries = mode === 'daily'
-          ? db.prepare('SELECT r.value, s.display_name FROM trading_daily_results r JOIN trading_sessions s ON s.id=r.session_id WHERE r.day=?').all(utcDay(clock())).map(row => {
-            const trade = jsonParse(row.value); return { displayName: row.display_name, pnl: trade.pnl, realizedR: trade.realizedR, count: 1 };
+          ? db.prepare('SELECT r.value, r.session_id, s.display_name FROM trading_daily_results r JOIN trading_sessions s ON s.id=r.session_id WHERE r.day=?').all(utcDay(clock())).map(row => {
+            const trade = jsonParse(row.value); return { displayName: row.display_name, pnl: trade.pnl, realizedR: trade.realizedR, count: 1, isYou: row.session_id === session.id };
           })
           : db.prepare('SELECT DISTINCT s.id, s.display_name FROM trading_sessions s JOIN trading_paper_trades p ON p.session_id=s.id').all().map(row => {
-            const stats = summarizeTrades(paperTrades(row.id)); return { displayName: row.display_name, pnl: stats.netPnl, realizedR: stats.avgR, count: stats.count, winRate: stats.winRate };
+            const stats = summarizeTrades(paperTrades(row.id)); return { displayName: row.display_name, pnl: stats.netPnl, realizedR: stats.avgR, count: stats.count, winRate: stats.winRate, isYou: row.id === session.id };
           });
         entries.sort((a, b) => b.pnl - a.pnl || b.realizedR - a.realizedR);
         return send({ mode, day: mode === 'daily' ? utcDay(clock()) : null, ranked: true, source: 'Server-verified anonymous practice sessions', entries: entries.slice(0, 100) });
@@ -385,7 +400,7 @@ export function createTradingService(db, options = {}) {
           const order = { ...body.order, entry: entryType === 'market' ? quote.price : body.order?.entry };
           let trade = openTrade(order, { instrument: symbol, mode: 'paper', time: quote.time, reasoning: text(body.reasoning, 6000), balance, entryType, currentPrice: quote.price });
           trade = { ...trade, ranked: true, serverVerified: true, source: quote.source, lastQuoteTime: quote.time };
-          updateName(session, body.displayName);
+          if (!session.account_id) updateName(session, body.displayName);
           savePosition(session.id, trade);
           return send({ trade, balance, quote });
         });

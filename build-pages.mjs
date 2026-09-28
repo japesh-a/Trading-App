@@ -8,7 +8,7 @@ import { series } from './scenarios.mjs';
 const root = fileURLToPath(new URL('.', import.meta.url));
 const output = path.join(root, 'dist');
 mkdirSync(output, { recursive: true });
-const files = readdirSync(path.join(root,'public')).filter(file=>/\.(js|css|json)$/.test(file));
+const files = readdirSync(path.join(root,'public')).filter(file=>/\.(js|css|json|svg)$/.test(file));
 const version = createHash('sha256').update(files.map(file=>readFileSync(path.join(root,'public',file),'utf8')).join('')).digest('hex').slice(0,12);
 for(const file of files){
   let content=readFileSync(path.join(root,'public',file),'utf8');

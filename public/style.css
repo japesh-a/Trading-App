@@ -34,6 +34,7 @@
   --shadow: 0 12px 38px #233b5712;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { scroll-behavior: smooth; scroll-padding-top: 24px; }
 body { margin: 0; min-width: 320px; background: var(--bg); color: var(--text); font: 14px/1.5 Inter, 'Segoe UI', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 button, input, select, textarea { font: inherit; }
@@ -568,6 +569,26 @@ label, .form-field { display: block; }
 #account-form label { display: grid; gap: 6px; color: var(--text); font-size: 12px; }
 #account-form p { margin: 0; font-size: 12px; }
 .account-switch { display: block; margin: 20px 0 14px; }
+.skip-link { position: fixed; left: 12px; top: -70px; z-index: 200; padding: 12px 18px; border: 2px solid var(--cyan); border-radius: 8px; color: var(--text); background: var(--panel); }
+.skip-link:focus { top: 12px; }
+#app:focus { outline: none; }
+.lesson-search, .journal-search { display: grid; gap: 8px; margin: 0 0 22px; max-width: 640px; }
+.lesson-search label, .journal-search label { font-size: 12px; color: var(--muted); }
+.lesson-search p { margin: 0; font-size: 12px; }
+.journal-pagination { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 18px; margin: 24px 0; color: var(--muted); font-size: 12px; }
+#profile-form, #password-form { display: grid; gap: 12px; margin-block: 18px; }
+#profile-form label, #password-form label { display: grid; gap: 6px; font-size: 12px; }
+#profile-form p, #password-form p { margin: 0; font-size: 12px; }
+.password-settings { margin: 20px 0; border-block: 1px solid var(--line); padding-block: 14px; }
+.password-settings summary { cursor: pointer; font-size: 13px; }
+.data-table tr.is-you { background: #4fd1b50d; }
+#network-status { margin: 0; padding: 10px 25px; border-bottom: 1px solid var(--line); color: var(--amber); background: var(--panel); font-size: 12px; }
+@media (max-width: 560px) {
+  .section-heading { flex-wrap: wrap; }
+  .journal-search { margin-bottom: 18px; }
+  .journal-pagination { gap: 10px; }
+  button, .btn { touch-action: manipulation; }
+}
 
 :root[data-theme='light'] .sidebar,
 :root[data-theme='light'] .topbar { background: #fff; }
@@ -614,6 +635,8 @@ label, .form-field { display: block; }
 :root[data-theme='light'] .btn.primary:hover:not(:disabled) { background: #056653; border-color: #056653; }
 :root[data-theme='light'] .btn.danger,
 :root[data-theme='light'] .error-message { color: var(--red); }
+:root[data-theme='light'] .status-pill.live,
+:root[data-theme='light'] .status-pill.success { color: var(--green); background: #e4f3ed; border-color: #b2d4c9; }
 :root[data-theme='light'] .status-pill.warning,
 :root[data-theme='light'] .status-pill.demo,
 :root[data-theme='light'] .connection-note,

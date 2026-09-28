@@ -18,6 +18,7 @@ export function createAccountService(db, { env, clock, fail, requestBody, rateLi
       token_hash TEXT PRIMARY KEY, account_id TEXT NOT NULL, expires INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS account_login_expiry ON account_logins(expires);
+    CREATE INDEX IF NOT EXISTS account_login_owner ON account_logins(account_id);
   `);
   const secure = env.WICKLUME_COOKIE_SECURE === 'true' || (env.NODE_ENV === 'production' && env.WICKLUME_COOKIE_SECURE !== 'false');
   const crossSite = env.WICKLUME_COOKIE_SAME_SITE === 'none';
@@ -55,6 +56,28 @@ export function createAccountService(db, { env, clock, fail, requestBody, rateLi
         if (token) db.prepare('DELETE FROM account_logins WHERE token_hash=?').run(digest(token));
         res.setHeader('Set-Cookie', cookie('', 0));
         return send({ account: null });
+      }
+      if (route === '/auth/password' && req.method === 'POST') {
+        const identity = resolve(req);
+        if (!identity) fail(401, 'Sign in before changing your password.');
+        rateLimit(`password:${identity.account_id}`, 6, 3600000);
+        const body = await requestBody(req);
+        if (typeof body.currentPassword !== 'string' || body.currentPassword.length > 128 || typeof body.newPassword !== 'string' || body.newPassword.length < 12 || body.newPassword.length > 128) fail(400, 'Enter your current password and a new password between 12 and 128 characters.');
+        if (body.currentPassword === body.newPassword) fail(400, 'Choose a password different from your current one.');
+        const account = db.prepare('SELECT * FROM accounts WHERE id=?').get(identity.account_id);
+        const candidate = await derive(body.currentPassword, account.salt, 64, keyOptions);
+        if (!timingSafeEqual(candidate, Buffer.from(account.password_hash, 'hex'))) fail(401, 'Your current password is incorrect.');
+        const salt = randomBytes(16).toString('hex');
+        const passwordHash = (await derive(body.newPassword, salt, 64, keyOptions)).toString('hex');
+        db.exec('BEGIN IMMEDIATE');
+        try {
+          const result = db.prepare('UPDATE accounts SET salt=?,password_hash=? WHERE id=? AND password_hash=?').run(salt, passwordHash, account.id, account.password_hash);
+          if (!result.changes) fail(409, 'Your password was changed in another session. Sign in again.');
+          db.prepare('DELETE FROM account_logins WHERE account_id=?').run(account.id);
+          issue(res, account.id);
+          db.exec('COMMIT');
+        } catch (error) { db.exec('ROLLBACK'); throw error; }
+        return send({ account: publicAccount(identity), message: 'Password changed. Other devices have been signed out.' });
       }
       if (!['/auth/register', '/auth/login'].includes(route) || req.method !== 'POST') return send({ error: 'Account endpoint not found.' }, 404);
       rateLimit(`auth-ip:${ip}`, 12, 15 * 60000);

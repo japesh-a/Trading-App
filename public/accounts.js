@@ -1,5 +1,18 @@
-import { serviceConfig } from './market-data.js';
-import { setAccountScope, recordTrade } from './trade-store.js';
+import { serviceConfig, setServiceAccount, requestService } from './market-data.js';
+import { setAccountScope, recordTrade, saveAccount } from './trade-store.js';
+
+let currentAccount = null;
+export const getCurrentAccount = () => currentAccount;
+export async function saveDisplayName(value) {
+  const displayName = String(value || '').trim();
+  if (!displayName || displayName.length > 40 || /[\u0000-\u001f\u007f]/.test(displayName)) throw Error('Enter a display name between 1 and 40 characters.');
+  const config = await serviceConfig();
+  if (config.apiBase) await requestService('/profile', { displayName });
+  saveAccount({ displayName });
+  if (currentAccount) currentAccount.displayName = displayName;
+  window.dispatchEvent(new CustomEvent('wicklume:profile', { detail: { displayName } }));
+  return displayName;
+}
 
 export async function initializeAccounts() {
   const button = document.getElementById('account-button');
@@ -22,6 +35,9 @@ export async function initializeAccounts() {
     catch (error) { statusMessage = error.message; }
   }
   setAccountScope(account?.id);
+  currentAccount = account;
+  setServiceAccount(account);
+  if (account) saveAccount({ displayName: account.displayName });
   if (account) {
     try {
       const response = await fetch(config.apiBase + '/api/trading/journal', { credentials: 'include', signal: AbortSignal.timeout(15000) });
@@ -33,6 +49,10 @@ export async function initializeAccounts() {
   profile.querySelector('b').textContent = account?.displayName || 'Guest practice';
   profile.querySelector('small').textContent = account ? 'Signed in · Paper money' : 'Saved on this browser';
   profile.querySelector('.avatar').textContent = account?.displayName?.slice(0, 1).toUpperCase() || 'W';
+  window.addEventListener('wicklume:profile', event => {
+    profile.querySelector('b').textContent = event.detail.displayName;
+    profile.querySelector('.avatar').textContent = event.detail.displayName.slice(0, 1).toUpperCase();
+  });
   const reload = () => {
     try { localStorage.setItem('wicklume-account-change', crypto.randomUUID()); } catch { /* Cookie login still works. */ }
     location.reload();
@@ -45,8 +65,33 @@ export async function initializeAccounts() {
       return;
     }
     if (account) {
-      content.innerHTML = '<p id="account-email"></p><p>Your learning progress and verified trades are saved to your account. Drawings and offline practice stay in this browser.</p><button class="btn" id="sign-out">Sign out</button><p class="error-message" role="alert" id="account-error"></p>';
+      content.innerHTML = `<p id="account-email"></p><p>Your learning progress and verified trades are saved to your account. Drawings and offline practice stay in this browser.</p>
+        <form id="profile-form"><label>Display name<input name="displayName" autocomplete="nickname" maxlength="40" required></label><button class="btn" type="submit">Save display name</button><p role="status" id="profile-status"></p></form>
+        <details class="password-settings"><summary>Change password</summary><form id="password-form">
+        <label>Current password<input name="currentPassword" type="password" autocomplete="current-password" maxlength="128" required></label>
+        <label>New password<input name="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label>
+        <label>Confirm new password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label>
+        <p class="muted">Use at least 12 characters. Changing your password signs out your other devices.</p><button class="btn" type="submit">Update password</button><p role="alert" class="error-message" id="password-error"></p></form></details>
+        <button class="btn" id="sign-out">Sign out</button><p class="error-message" role="alert" id="account-error"></p>`;
       content.querySelector('#account-email').textContent = `Signed in as ${account.email}`;
+      content.querySelector('[name="displayName"]').value = account.displayName;
+      content.querySelector('#profile-form').onsubmit = async event => {
+        event.preventDefault();
+        const submit = event.currentTarget.querySelector('button'); submit.disabled = true;
+        try { account.displayName = await saveDisplayName(content.querySelector('[name="displayName"]').value); content.querySelector('#profile-status').textContent = 'Display name saved.'; }
+        catch (error) { content.querySelector('#profile-status').textContent = error.message; }
+        finally { submit.disabled = false; }
+      };
+      content.querySelector('#password-form').onsubmit = async event => {
+        event.preventDefault();
+        const values = Object.fromEntries(new FormData(event.currentTarget));
+        const errorElement = content.querySelector('#password-error');
+        if (values.newPassword !== values.confirmPassword) { errorElement.textContent = 'The new passwords do not match.'; return; }
+        const submit = event.currentTarget.querySelector('button'); submit.disabled = true;
+        errorElement.textContent = '';
+        try { await call('password', { currentPassword: values.currentPassword, newPassword: values.newPassword }); reload(); }
+        catch (error) { errorElement.textContent = error.message; submit.disabled = false; }
+      };
       content.querySelector('#sign-out').onclick = async event => {
         event.target.disabled = true;
         try { await call('logout', {}); reload(); }

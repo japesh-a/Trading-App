@@ -16,9 +16,10 @@ db.exec('CREATE TABLE IF NOT EXISTS progress (id INTEGER PRIMARY KEY CHECK(id=1)
 db.prepare('INSERT OR IGNORE INTO progress VALUES(1,?)').run(JSON.stringify({completed:[],challenges:[],attempts:0,correct:0,days:[]}));
 const get=()=>JSON.parse(db.prepare('SELECT value FROM progress WHERE id=1').get().value);
 const handleTradingRequest=createTradingService(db);
-const publicFiles=new Set(['index.html',...readdirSync(path.join(root,'public')).filter(file=>/\.(js|css|json)$/.test(file))]);
-const clients=new Set();watch(path.join(root,'public'),()=>clients.forEach(client=>{try{client.write('data: reload\n\n')}catch{clients.delete(client)}}));
+const publicFiles=new Set(['index.html',...readdirSync(path.join(root,'public')).filter(file=>/\.(js|css|json|svg)$/.test(file))]);
+const clients=new Set();if(process.env.NODE_ENV!=='production')watch(path.join(root,'public'),()=>clients.forEach(client=>{try{client.write('data: reload\n\n')}catch{clients.delete(client)}}));
 http.createServer(async(req,res)=>{
+ res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');res.setHeader('X-Frame-Options','DENY');
  const url=new URL(req.url,'http://localhost');const json=(value,status=200)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(value));};
  if(await handleTradingRequest(req,res,url))return;
  if(url.pathname==='/events'){res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache','Connection':'keep-alive'});res.write(': connected\n\n');clients.add(res);req.on('close',()=>clients.delete(res));return;}
@@ -41,5 +42,5 @@ http.createServer(async(req,res)=>{
  else{if(!['Buy','No trade','Sell'].includes(body.choice)||!Number.isInteger(body.reason)||body.reason<0||body.reason>2)throw Error('Choose a decision and reason');const best=['Buy','Sell','No trade'][id];if(!s.challenges.includes(id))s.challenges.push(id);result={best,candles:series[id],aligned:body.choice===best&&body.reason===id};}
  const day=new Date().toISOString().slice(0,10);if(!s.days.includes(day))s.days.push(day);db.prepare('UPDATE progress SET value=? WHERE id=1').run(JSON.stringify(s));return json({...result,progress:s});
  }catch(e){return json({error:e.message},400);}}
- const file=url.pathname==='/'?'index.html':url.pathname.slice(1);if(!publicFiles.has(file)){res.writeHead(404);return res.end('Not found');}try{const content=readFileSync(path.join(root,'public',file));res.writeHead(200,{'Content-Type':file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':'text/html','Cache-Control':'no-store'});res.end(content)}catch{if(!res.headersSent){res.writeHead(500);res.end('Unable to load page')}}
+ const file=url.pathname==='/'?'index.html':url.pathname.slice(1);if(!publicFiles.has(file)){res.writeHead(404);return res.end('Not found');}try{const content=readFileSync(path.join(root,'public',file));res.writeHead(200,{'Content-Type':file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':file.endsWith('.svg')?'image/svg+xml':'text/html','Cache-Control':'no-store'});res.end(req.method==='HEAD'?undefined:content)}catch{if(!res.headersSent){res.writeHead(500);res.end('Unable to load page')}}
 }).listen(port,host,()=>console.log(`Wicklume server: http://${host}:${port}`));

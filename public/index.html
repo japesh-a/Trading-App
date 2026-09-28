@@ -5,11 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0b101b">
 <meta name="description" content="Learn market structure, practise daily chart replays, and build a disciplined paper trading record with Wicklume.">
+<link rel="icon" type="image/svg+xml" href="./icon.svg">
 <title>Wicklume · Learn. Practice. Review.</title>
 <script src="/theme.js"></script>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+<noscript><p class="notice">Wicklume needs JavaScript for lessons, interactive charts and paper trading. Enable it to open your workspace.</p></noscript>
+<a class="skip-link" href="#app">Skip to workspace</a>
 <aside class="sidebar">
 <a class="brand" href="#home"><span class="mark">w↗</span>wicklume<span class="accent">.</span></a>
 <div class="workspace-label">TRADING WORKSPACE</div>
@@ -28,7 +31,7 @@
 </aside>
 <div class="shell">
 <header class="topbar"><div><span class="muted">Workspace</span> <span class="slash">/</span> <span id="page-name">Overview</span></div><div class="top-actions"><button class="btn compact" id="theme-toggle" aria-label="Switch theme">Light mode</button><button class="btn compact" id="account-button">Sign in</button><span class="streak" id="streak">◈ 0 day streak</span><span class="status-pill">PAPER MODE</span></div></header>
-<main id="app"><p>Opening your workspace…</p></main>
+<main id="app" tabindex="-1" aria-busy="true"><p role="status">Opening your workspace…</p></main>
 <footer>Build skill. Keep a record.<span>Educational simulations · No real-money trading</span></footer>
 </div>
 <div id="toast" role="status"></div>

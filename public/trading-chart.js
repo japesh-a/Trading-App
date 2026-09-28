@@ -75,6 +75,7 @@ export class TradingChart {
     if (options.decimals === undefined) this.decimals = 2;
     this.onLevelChange = typeof options.onLevelChange === 'function' ? options.onLevelChange : () => {};
     this.onDrawingsChange = typeof options.onDrawingsChange === 'function' ? options.onDrawingsChange : () => {};
+    this.onToolChange = typeof options.onToolChange === 'function' ? options.onToolChange : () => {};
     this.levels = {};
     this.editable = true;
     this.candles = [];
@@ -116,7 +117,7 @@ export class TradingChart {
       .wl-chart__live { position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%); }
       @media(max-width:600px) { .wl-chart__readout { top:12px;gap:4px 8px; }.wl-chart__ohlc { font-size:9px; }.wl-chart__hint { font-size:8px; } }
     </style>
-    <svg class="wl-chart__svg" xmlns="${SVG_NS}" tabindex="0" role="application" aria-label="Interactive candlestick chart. Drag to pan, scroll to zoom. Select drawing tools above the chart; press Escape to cancel a drawing and Delete to remove a selected drawing."></svg>
+    <svg class="wl-chart__svg" xmlns="${SVG_NS}" tabindex="0" role="application" aria-label="Interactive candlestick chart. Drag or use left and right arrows to pan. Scroll or press plus and minus to zoom. Press R to reset the view. Select drawing tools above the chart; press Escape to cancel a drawing and Delete to remove a selected drawing."></svg>
     <div class="wl-chart__readout"><span class="wl-chart__symbol"></span><span class="wl-chart__ohlc"></span></div>
     <button class="wl-chart__reset" type="button" title="Fit recent candles and trade levels">Reset view</button>
     <div class="wl-chart__hint">SCROLL TO ZOOM · DRAG TO PAN</div>
@@ -182,6 +183,7 @@ export class TradingChart {
     this.tool = ['cursor', 'trend', 'fib', 'horizontal', 'label'].includes(tool) ? tool : 'cursor';
     this.draft = null;
     this.wrapper.dataset.tool = this.tool;
+    this.onToolChange(this.tool);
     this.hint.textContent = {
       cursor: 'SCROLL TO ZOOM · DRAG TO PAN',
       trend: 'CLICK TWO POINTS FOR A TREND LINE · ESC TO CANCEL',

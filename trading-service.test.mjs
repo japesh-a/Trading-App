@@ -109,6 +109,37 @@ test('account routes reject hostile origins, use production Secure cookies and t
   } finally { await f.close(); }
 });
 
+test('account profile names stay authoritative and password changes revoke other devices', async () => {
+  const f = await fixture();
+  const credentials = { email: 'profile@example.com', password: 'initial-long-password', displayName: 'Alice' };
+  const cookie = response => ({ Cookie: response.headers.get('set-cookie').split(';')[0] });
+  try {
+    assert.equal((await f.call('/auth/password', { currentPassword: credentials.password, newPassword: 'replacement-password' })).status, 401);
+    const registered = await f.call('/auth/register', credentials);
+    const original = cookie(registered);
+    const otherDevice = cookie(await f.call('/auth/login', credentials));
+    assert.equal((await f.call('/profile', { displayName: ' ' }, undefined, original)).status, 400);
+    assert.equal((await f.call('/profile', { displayName: 'Alice charts' }, undefined, original)).data.displayName, 'Alice charts');
+    const opened = await f.call('/paper/open', { symbol: 'BTC', order: { side: 'buy', entry: 100, stopLoss: 95, takeProfit: 110, quantity: 1 }, displayName: 'You' }, undefined, original);
+    assert.equal(opened.status, 200);
+    assert.equal((await f.call('/auth/me', undefined, undefined, original)).data.account.displayName, 'Alice charts', 'A trade cannot overwrite the account profile with an old local name');
+    const change = { currentPassword: credentials.password, newPassword: 'replacement-long-password' };
+    assert.equal((await f.call('/auth/password', { ...change, currentPassword: 'incorrect-password' }, undefined, original)).status, 401);
+    assert.equal((await f.call('/auth/password', { ...change, newPassword: credentials.password }, undefined, original)).status, 400);
+    const changed = await f.call('/auth/password', change, undefined, original);
+    assert.equal(changed.status, 200);
+    const fresh = cookie(changed);
+    assert.equal((await f.call('/auth/me', undefined, undefined, otherDevice)).status, 401);
+    assert.equal((await f.call('/auth/me', undefined, undefined, original)).status, 401);
+    assert.equal((await f.call('/auth/me', undefined, undefined, fresh)).status, 200);
+    assert.equal((await f.call('/auth/login', credentials)).status, 401);
+    assert.equal((await f.call('/auth/login', { ...credentials, password: change.newPassword })).status, 200);
+    assert.equal((await f.call('/paper/state?symbol=BTC', undefined, undefined, fresh)).data.trade.id, opened.data.trade.id, 'Changing passwords preserves trading data');
+    await f.call('/paper/close', {}, undefined, fresh);
+    assert.deepEqual((await f.call('/progress', undefined, undefined, fresh)).data.days, [f.challenge.day]);
+  } finally { await f.close(); }
+});
+
 test('sessions are authenticated, token hashes persist, and CORS/body limits apply', async () => {
   const f = await fixture();
   try {
@@ -181,10 +212,12 @@ test('daily routes hide future bars, enforce entry/risk/one attempt, and calcula
     assert.equal(restore.data.trade.id, result.data.trade.id);
     assert.equal((await f.call('/challenge', undefined, token)).data.submitted, true);
     const board = await f.call('/leaderboard?mode=daily', undefined, token);
-    assert.deepEqual(board.data.entries, [{ displayName: 'Alex', pnl: 80, realizedR: 1.6, count: 1 }]);
+    assert.deepEqual(board.data.entries, [{ displayName: 'Alex', pnl: 80, realizedR: 1.6, count: 1, isYou: true }]);
+    assert.deepEqual((await f.call('/progress', undefined, token)).data.days, [f.challenge.day], 'Completing practice counts towards the streak');
     const other = (await f.call('/session', {})).data.token;
     assert.equal((await f.call('/daily/result', undefined, other)).status, 404);
     assert.equal((await f.call('/leaderboard?mode=daily', undefined, other)).data.entries.length, 1);
+    assert.equal((await f.call('/leaderboard?mode=daily', undefined, other)).data.entries[0].isYou, false);
   } finally { await f.close(); }
 });
 
