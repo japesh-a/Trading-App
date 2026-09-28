@@ -705,6 +705,7 @@ label, .form-field { display: block; }
 .figure-home-preview { width:100px;height:125px;margin:0 auto 12px; }
 .journey-figure { width:88px;height:110px;margin-bottom:16px; }
 .wardrobe { margin-top:24px; }
+.chart-feed-note { margin:0;padding:10px 14px;background:var(--panel-raised);border-block:1px solid var(--line);color:var(--amber);font-size:11px;line-height:1.5; }
 .wardrobe-layout { display:grid;grid-template-columns:150px minmax(0,1fr);gap:28px;align-items:start; }
 .figure-preview { display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px;background:var(--panel-raised);border:1px solid var(--line);border-radius:12px;text-align:center; }
 .figure-preview .figure-svg { width:112px;height:140px; }

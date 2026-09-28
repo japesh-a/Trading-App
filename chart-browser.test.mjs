@@ -152,10 +152,33 @@ try {
         await until(`document.querySelector('[data-timeframe="${tf}"]').getAttribute('aria-pressed')==='true'`);await delay(60);
         assert(await evaluate(`(async()=>{const {TIMEFRAMES}=await import('/timeframes.js');const c=deskChart.series.data();return c.length>=2&&c.length<=180&&c.every((b,i)=>b.time%TIMEFRAMES['${tf}']===0&&(!i||b.time>c[i-1].time)&&b.high>=Math.max(b.open,b.close)&&b.low<=Math.min(b.open,b.close))})()`),`${symbol} ${tf} has valid aligned candles in ${theme}`);
         assert(await evaluate('deskChart.series.options().priceFormat.precision===('+ (symbol==='GBPUSD'?5:symbol==='BTC'?2:symbol==='US500'?2:2) +')'),'Instrument price precision is retained');
+        assert(await evaluate('document.querySelector(".chart-feed-note").textContent.includes("not real market history")&&deskChart.symbol.includes("SYNTHETIC")'),'Training data is labelled directly on the chart');
+        if(tf==='1d'){
+          assert(await evaluate(`(async()=>{const {TRAINING_BASES}=await import('/market-data.js');const base=TRAINING_BASES['${symbol}'];const bars=deskChart.series.data();return bars.length===31&&bars.every(c=>c.low>base*.7&&c.high<base*1.3)&&Math.abs(bars.at(-1).close-Number(document.querySelector('.metric-strip .metric strong').textContent.replace(/,/g,'')))<10**(-deskChart.decimals)})()`),`${symbol} daily prices have no runaway synthetic drift and match the current quote`);
+          if(symbol==='US500'){
+            await evaluate('document.querySelector("#trading-chart").scrollIntoView({block:"center",behavior:"instant"})');await delay(80);
+            await screenshot(`us500-daily-corrected-${theme}.png`);
+            await evaluate('window.scrollTo({top:0,behavior:"instant"})');
+          }
+        }
       }
     }
   }
+  await evaluate(`(async()=>{const {saveSession}=await import('/trade-store.js');saveSession('paper-US500-training',{feedVersion:1,orderType:'trigger',entryDraft:12000,orderDraft:{stopLoss:11900,takeProfit:12300,risk:100},reasoning:'Keep my notes',drawings:[]});document.querySelector('[data-market="US500"]').click()})()`);
+  await until('document.querySelector("[data-market=US500]")?.classList.contains("active")&&document.querySelector("#order-stop")');
+  assert(await evaluate('Number(document.querySelector("#order-stop").value)<6000&&document.querySelector("#order-type").value==="market"'),'A legacy training draft cannot distort the corrected price scale');
+  assert.equal(await evaluate('document.querySelector("#trade-reasoning").value'),'Keep my notes','Feed migration preserves trade notes');
   await screenshot('checked-paper-timeframes.png');
+  await evaluate(`(async()=>{
+    const {saveSession}=await import('/trade-store.js');
+    saveSession('paper-US500',{trade:{id:'connected-position',status:'open',demo:false,entry:12000},reasoning:'Connected plan stays separate'});
+    document.querySelector('#refresh-market').click();
+  })()`);
+  await until('document.querySelector("#retry-market-feed")');
+  assert(await evaluate('document.querySelector(".empty-state").textContent.includes("Real US500 market history is unavailable")&&!document.querySelector(".wl-chart")'),'Missing providers cannot silently display a fake US500 chart');
+  await evaluate('document.querySelector("#use-training-feed").click()');await until('document.querySelector("#place-order")');
+  assert.equal(await evaluate('document.querySelector("#position-status").textContent'),'Ready to plan');
+  assert(await evaluate(`(async()=>{const {getSession}=await import('/trade-store.js');return getSession('paper-US500').trade.status==='open'})()`),'Connected positions remain untouched by synthetic training mode');
   await evaluate('location.hash="profile"');await until('document.querySelector(".wardrobe")');
   assert.equal(await evaluate('document.querySelectorAll("[data-costume]:not(:disabled)").length'),1,'New users start with the grey figure');
   // Complete real lesson records through the service; incorrect answers still complete a lesson.

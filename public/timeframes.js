@@ -28,9 +28,12 @@ export function aggregateCandles(candles, interval) {
 /** Add a sampled quote to the displayed candle without changing execution data. */
 export function withQuote(candles, quote, interval) {
   if (!Number.isFinite(quote?.price) || !Number.isFinite(quote?.time) || quote.price <= 0) return candles;
-  const time = Math.floor(quote.time / interval) * interval;
   const result = candles.slice();
   const last = result.at(-1);
+  // Provider intraday bars may start at a session offset (e.g. US equities at :30).
+  // Daily timestamps represent trading dates, while UTC-generated series have offset zero.
+  const offset=last && interval<86400 ? ((last.time%interval)+interval)%interval : 0;
+  const time = Math.floor((quote.time-offset) / interval) * interval + offset;
   if (last && last.time > time) return result;
   if (last && last.time === time) result[result.length - 1] = {
     ...last, high: Math.max(last.high, quote.price), low: Math.min(last.low, quote.price), close: quote.price,

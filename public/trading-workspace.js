@@ -1,7 +1,7 @@
 import {TradingChart} from './trading-chart.js';
 import {INSTRUMENTS,validateOrder,openTrade,advanceTrade,markToMarket,closeTrade,cancelPendingTrade,summarizeTrades} from './trade-engine.js';
 import {loadAccount,getTrades,recordTrade,getSession,saveSession,updateTradeNotes} from './trade-store.js';
-import {loadDaily,loadDailyContext,loadPaperMarket,loadPaperTimeframe,paperQuote,requestService,utcDay,trainingChallenge,demoMarket} from './market-data.js';
+import {loadDaily,loadDailyContext,loadPaperMarket,loadPaperTimeframe,paperQuote,requestService,utcDay,trainingChallenge,demoMarket,TRAINING_FEED_VERSION} from './market-data.js';
 import {TIMEFRAMES,DAILY_TIMEFRAMES,PAPER_TIMEFRAMES,aggregateCandles,withQuote,refreshCachedCharts} from './timeframes.js';
 import {tradesCsv,matchesTradeSearch} from './journal-utils.js';
 import {saveDisplayName} from './accounts.js';
@@ -34,6 +34,24 @@ export function renderTrading(container,{mode='daily',onToast=()=>{}}){
     try{
       let loaded=mode==='daily'?(training?saved?.data||trainingChallenge():saved?.data&&(!saved.data.ranked||saved.trade)?saved.data:await loadDaily()):training?demoMarket(symbol,'You selected training mode. These synthetic prices are excluded from rankings.'):await loadPaperMarket(symbol);
       if(disposed||token!==generation)return;
+      if(mode==='paper'&&loaded.demo&&!training){
+        q('#workspace-body').innerHTML=`<div class="market-tabs">${Object.values(INSTRUMENTS).map(i=>`<button data-market="${i.id}" class="${i.id===symbol?'active':''}" aria-pressed="${i.id===symbol}">${escapeHTML(i.label||i.id)}</button>`).join('')}</div><section class="empty-state"><h2>Real ${escapeHTML(symbol)} market history is unavailable.</h2><p>${escapeHTML(loaded.message||'Connect a market-data provider to view real prices.')}</p><p>Training mode uses generated prices. They do not show the real market.</p><button class="btn primary" id="use-training-feed">Use synthetic training mode</button><button class="btn" id="retry-market-feed">Retry market connection</button></section>`;
+        container.querySelectorAll('[data-market]').forEach(button=>button.onclick=()=>load(button.dataset.market,false));
+        q('#retry-market-feed').onclick=()=>load(symbol,false);
+        q('#use-training-feed').onclick=()=>{
+          // Only migrate an identified synthetic position; never price a connected position on fake candles.
+          if(saved?.trade?.demo&&['open','pending'].includes(saved.trade.status)&&!getSession('paper-'+symbol+'-training'))saveSession('paper-'+symbol+'-training',saved);
+          load(symbol,true);
+        };
+        return;
+      }
+      if(mode==='paper'&&loaded.demo&&saved?.feedVersion!==TRAINING_FEED_VERSION){
+        if(['open','pending'].includes(saved?.trade?.status)){
+          loaded=demoMarket(symbol,'This existing position keeps its original synthetic feed until it is closed.',Date.now(),true);
+        }else if(saved){
+          orderDraft=null;orderType='market';entryDraft=null;
+        }
+      }
       if(mode==='paper'&&loaded.connected){
         const state=await requestService('/paper/state?symbol='+encodeURIComponent(symbol));
         if(disposed||token!==generation)return;
@@ -48,7 +66,7 @@ export function renderTrading(container,{mode='daily',onToast=()=>{}}){
       data=loaded;
       if(mode==='paper')data.candles=withQuote(data.candles,{price:data.price,time:data.time},60);
       if(mode==='daily'&&saved){({trade,cursor=0,speed=1,drawings=[],reasoning='',resultSaved=false,official=null}=saved);}
-      if(saved&&!trade){orderType=saved.orderType||'market';entryDraft=saved.entryDraft??null;}
+      if(saved&&!trade&&!(mode==='paper'&&data.demo&&saved.feedVersion!==data.feedVersion)){orderType=saved.orderType||'market';entryDraft=saved.entryDraft??null;}
       if(mode==='daily'&&data.ranked&&data.submitted&&!trade){const result=await requestService('/daily/result');if(disposed||token!==generation)return;data.future=result.future;official=result.trade;trade=result.trade;cursor=result.future.length;resultSaved=true;reasoning=trade.reasoning||'';}
       if(mode==='paper'&&!data.connected&&['open','pending'].includes(saved?.trade?.status)){trade=saved.trade;reasoning=saved.reasoning||'';drawings=saved.drawings||[];}
       price=mode==='daily'?visible().at(-1).close:data.price;
@@ -59,7 +77,7 @@ export function renderTrading(container,{mode='daily',onToast=()=>{}}){
       if(mode==='paper')poller=setInterval(()=>tickPaper(token),data.demo?1000:8000);
     }catch(error){if(!disposed&&token===generation)q('#workspace-body').innerHTML=`<div class="empty-state"><h2>Market data is unavailable</h2><p>${errorText(error)}</p><button class="btn" data-page="${mode==='daily'?'practice':'paper'}">Try again</button></div>`;}
   }
-  function persist(){if(!data)return;saveSession(sessionKey,{data:mode==='daily'?data:undefined,trade,cursor,speed,drawings,reasoning,resultSaved,official,orderType,entryDraft,timeframe,orderDraft,side});}
+  function persist(){if(!data)return;saveSession(sessionKey,{data:mode==='daily'?data:undefined,feedVersion:data.feedVersion,trade,cursor,speed,drawings,reasoning,resultSaved,official,orderType,entryDraft,timeframe,orderDraft,side});}
   function visible(){return mode==='daily'?[...data.history,...(data.future||[]).slice(0,cursor)]:data.candles;}
   function chartCandles(){
     if(mode==='paper')return timeframe==='1m'?data.candles.slice(-180):viewCandles;
@@ -86,7 +104,7 @@ export function renderTrading(container,{mode='daily',onToast=()=>{}}){
     timeframe=next;persist();
     container.querySelectorAll('[data-timeframe]').forEach(button=>{const selected=button.dataset.timeframe===next;button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));});
     q('.terminal-head div span').textContent=' '+next+(mode==='daily'?' · Replay':' · Paper');
-    q('#timeframe-note').textContent=mode==='daily'?(next==='15m'?'15-minute replay candles':data.contextLimited?'Limited earlier history · revealed bars only':'Higher views use only revealed candles'):(data.demo?'Synthetic training chart':'Chart view · execution uses live quotes');
+    q('#timeframe-note').textContent=mode==='daily'?(next==='15m'?'15-minute replay candles':data.contextLimited?'Limited earlier history · revealed bars only':'Higher views use only revealed candles'):(data.demo?'Synthetic prices · not market history':'Chart view · execution uses live quotes');
     chart.setData(chartCandles());chart.resetView();
   }
   function formatPrice(value){return num(value,instrument.decimals);}
@@ -97,7 +115,13 @@ export function renderTrading(container,{mode='daily',onToast=()=>{}}){
     q('[data-tool="horizontal"]').insertAdjacentHTML('afterend','<button data-tool="fib" title="Mark Fibonacci retracement levels across a price swing">% Fib retracement</button>');
     q('.chart-area').insertAdjacentHTML('beforebegin',`<div class="timeframe-bar"><div class="timeframe-tabs" role="group" aria-label="Chart timeframe">${(mode==='daily'?DAILY_TIMEFRAMES:PAPER_TIMEFRAMES).map(value=>`<button data-timeframe="${value}" class="${value===timeframe?'active':''}" aria-pressed="${value===timeframe}" type="button">${value}</button>`).join('')}</div><span id="timeframe-note">${mode==='daily'?'Replay reveals 15-minute bars':'Chart view · execution uses quotes'}</span></div>`);
     q('.terminal-head div span').textContent=' '+timeframe+(mode==='daily'?' · Replay':' · Paper');
-    q('#timeframe-note').textContent=mode==='daily'?(timeframe==='15m'?'15-minute replay candles':data.contextLimited?'Limited earlier history · revealed bars only':'Higher views use only revealed candles'):(data.demo?'Synthetic training chart':'Chart view · execution uses live quotes');
+    q('#timeframe-note').textContent=mode==='daily'?(timeframe==='15m'?'15-minute replay candles':data.contextLimited?'Limited earlier history · revealed bars only':'Higher views use only revealed candles'):(data.demo?'Synthetic prices · not market history':'Chart view · execution uses live quotes');
+    if(data.demo){
+      q('.chart-area').insertAdjacentHTML('beforebegin',`<p class="chart-feed-note" role="status">Synthetic ${escapeHTML(instrument.id)} prices · generated for practice, not real market history.${data.feedVersion===1?' This existing position uses its original training sample.':''}</p>`);
+      q('.terminal-head div b').textContent=(instrument.label||instrument.id)+' · Training';
+      q('.metric-strip .metric small').textContent='Synthetic price';
+      q('#feed-status').textContent=mode==='daily'?data.marketDate+' · Synthetic replay':'Synthetic quotes refresh every second';
+    }
     q('#order-entry').closest('.form-field').insertAdjacentHTML('beforebegin','<div class="form-field"><label for="order-type">Entry method</label><select id="order-type"><option value="market">Market now</option><option value="trigger">At chosen price</option></select></div>');
     q('#order-type').value=orderType;
     q('.account-bar').insertAdjacentHTML('beforeend',`<button class="btn compact" id="refresh-market" ${trade&&['open','pending'].includes(trade.status)?'disabled':''}>${data.demo?'Try connected feed':'Refresh feed'}</button>`);
@@ -109,7 +133,7 @@ export function renderTrading(container,{mode='daily',onToast=()=>{}}){
     q('.ticket-hint').textContent='Drag the entry, stop and target lines on the chart, or type exact prices. A chosen entry waits for price to reach it.';
     q('.execution-notes p').textContent='Market orders enter at the displayed quote. Chosen-price orders wait for that level; if a candle crosses it, the fill is at the selected price and exits start on the following candle. Stop gaps fill at the next available open; targets fill at their level. If a candle touches both exits, the stop is counted first. Zero fees and spread in this simulation.';
     if(mode==='paper'){q('#close-position').disabled=!['open','pending'].includes(trade?.status);q('#close-position').textContent=trade?.status==='pending'?'Cancel pending entry':'Close position';}
-    chart=new TradingChart(q('#trading-chart'),{candles:chartCandles(),symbol:instrument.id,decimals:instrument.decimals,drawings,onToolChange:tool=>{container.querySelectorAll('[data-tool]').forEach(button=>{const active=button.dataset.tool===tool;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});},onDrawingsChange:value=>{drawings=value;persist();},onLevelChange:levels=>{if(trade){setChartLevels();return;}if(Number.isFinite(levels.entry)&&Math.abs(levels.entry-draft().entry)>10**(-instrument.decimals)*.51){orderType='trigger';entryDraft=levels.entry;q('#order-type').value='trigger';q('#order-entry').readOnly=false;q('#order-entry').closest('.form-field').querySelector('label').textContent='Entry · drag line or type a price';q('#order-entry').value=formatPrice(levels.entry);q('#place-order').textContent=mode==='daily'?'Lock price entry & start replay':'Place price entry';}q('#order-stop').value=formatPrice(levels.stopLoss);q('#order-target').value=formatPrice(levels.takeProfit);updateDraft();persist();}});
+    chart=new TradingChart(q('#trading-chart'),{candles:chartCandles(),symbol:instrument.id+(data.demo?' · SYNTHETIC':''),decimals:instrument.decimals,drawings,onToolChange:tool=>{container.querySelectorAll('[data-tool]').forEach(button=>{const active=button.dataset.tool===tool;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});},onDrawingsChange:value=>{drawings=value;persist();},onLevelChange:levels=>{if(trade){setChartLevels();return;}if(Number.isFinite(levels.entry)&&Math.abs(levels.entry-draft().entry)>10**(-instrument.decimals)*.51){orderType='trigger';entryDraft=levels.entry;q('#order-type').value='trigger';q('#order-entry').readOnly=false;q('#order-entry').closest('.form-field').querySelector('label').textContent='Entry · drag line or type a price';q('#order-entry').value=formatPrice(levels.entry);q('#place-order').textContent=mode==='daily'?'Lock price entry & start replay':'Place price entry';}q('#order-stop').value=formatPrice(levels.stopLoss);q('#order-target').value=formatPrice(levels.takeProfit);updateDraft();persist();}});
     defaults();wire();updateUI();if(resultSaved)showResult();
     if(mode==='paper'&&!data.connected&&['open','pending'].includes(trade?.status)){
       for(const bar of data.candles.filter(c=>c.time>(trade.entryTime??trade.placedTime)&&c.time+60<Date.now()/1000)){trade=advanceTrade(trade,bar);if(trade.status==='closed')break;}
@@ -209,7 +233,9 @@ export function renderTrading(container,{mode='daily',onToast=()=>{}}){
       if(data.connected)q('.account-bar span').innerHTML='<b>Paper balance</b> '+money(balance);
       data.price=price;data.time=quote.time;
       data.candles=withQuote(data.candles,quote,60);
-      data.candles=data.candles.slice(data.demo?-(30*24*60):-500);
+      data.candles=data.demo&&data.feedVersion===TRAINING_FEED_VERSION
+        ?data.candles.filter(c=>c.time>=Math.floor(quote.time/86400)*86400-30*86400)
+        :data.candles.slice(data.demo?-(30*24*60):-500);
       refreshCachedCharts(timeframeCache,quote);
       if(timeframe==='1m')chart.setData(chartCandles());
       else if(data.demo){viewCandles=aggregateCandles(data.candles,TIMEFRAMES[timeframe]).slice(-180);timeframeCache.set(timeframe,{time:Date.now(),candles:viewCandles});chart.setData(viewCandles);}

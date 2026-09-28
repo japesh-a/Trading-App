@@ -189,6 +189,35 @@ test('chart history supports every paper timeframe without changing the executio
   } finally { await f.close(); }
 });
 
+test('default Twelve Data adapter preserves provider daily dates/OHLC and intraday session timestamps for every market',async()=>{
+  const requests=[],now=Date.parse('2026-09-25T12:00:00Z')/1000;
+  const f=await fixture({
+    env:{TWELVE_DATA_API_KEY:'test-only-not-a-real-key'},marketProvider:undefined,
+    quoteProvider:async()=>({price:5405,time:now,source:'Provider quote fixture'}),
+    fetchImpl:async url=>{
+      const parsed=new URL(url);requests.push(parsed);
+      assert.equal(parsed.origin,'https://api.twelvedata.com');
+      assert.equal(parsed.searchParams.get('timezone'),'UTC');
+      return{ok:true,json:async()=>({values:[
+        {datetime:parsed.searchParams.get('interval')==='1day'?'2026-09-24':'2026-09-24 13:30:00',open:'5400',high:'5412.5',low:'5388.25',close:'5405.75',volume:'1200'},
+        {datetime:parsed.searchParams.get('interval')==='1day'?'2026-09-23':'2026-09-23 13:30:00',open:'5390',high:'5401',low:'5382',close:'5398',volume:'1100'},
+      ]})};
+    },
+  });
+  try{
+    const token=(await f.call('/session',{})).data.token;
+    for(const symbol of ['US500','XAUUSD','GBPUSD'])for(const timeframe of ['1m','5m','15m','1h','4h','1d']){
+      const result=await f.call('/market?symbol='+symbol+'&timeframe='+timeframe,undefined,token);
+      assert.equal(result.status,200);
+      assert.deepEqual(result.data.candles.map(c=>[c.open,c.high,c.low,c.close]),[[5390,5401,5382,5398],[5400,5412.5,5388.25,5405.75]],'Provider OHLC stays exact, with chronological ordering');
+      assert.equal(result.data.candles.at(-1).time,Date.parse(timeframe==='1d'?'2026-09-24T00:00:00Z':'2026-09-24T13:30:00Z')/1000);
+      assert.equal(result.data.demo,false);
+    }
+    assert.equal(requests.length,18);
+    assert(requests.filter(r=>r.searchParams.get('symbol')==='SPX').some(r=>r.searchParams.get('interval')==='1day'));
+  }finally{await f.close();}
+});
+
 test('daily routes hide future bars, enforce entry/risk/one attempt, and calculate P/L themselves', async () => {
   const f = await fixture();
   try {

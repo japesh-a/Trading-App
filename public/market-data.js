@@ -45,6 +45,22 @@ export function demoCandles(symbol='BTC',start=Math.floor(Date.now()/1000)-144*9
   const rng=random(symbol+seed),base={BTC:62000,US500:5400,XAUUSD:2450,GBPUSD:1.28}[symbol]||100;
   let price=base;return Array.from({length:count},(_,i)=>{const open=price;const move=(rng()-.49)*base*.003;price=Math.max(base*.1,open+move);return{time:start+i*interval,open,high:Math.max(open,price)+rng()*base*.001,low:Math.min(open,price)-rng()*base*.001,close:price,volume:10+rng()*100};});
 }
+
+export const TRAINING_FEED_VERSION = 2;
+export const TRAINING_BASES = Object.freeze({ BTC:62000, US500:5400, XAUUSD:2450, GBPUSD:1.28 });
+
+/** Zero-mean, gently mean-reverting training returns. These are never market history. */
+export function trainingCandles(symbol,start,count,seed=utcDay()){
+  const rng=random(symbol+seed),base=TRAINING_BASES[symbol]||100;
+  const volatility={BTC:.0006,US500:.00025,XAUUSD:.00035,GBPUSD:.00016}[symbol]||.00025;
+  let price=base;
+  return Array.from({length:count},(_,i)=>{
+    const open=price,noise=rng()+rng()+rng()-1.5;
+    price=Math.exp(Math.log(open)-.00005*Math.log(open/base)+noise*volatility);
+    return{time:start+i*60,open,high:Math.max(open,price)*Math.exp(rng()*volatility*.5),
+      low:Math.min(open,price)*Math.exp(-rng()*volatility*.5),close:price,volume:10+rng()*100};
+  });
+}
 export async function coinbaseCandles(start,end,granularity=900){
   const params=new URLSearchParams({start:new Date(start*1000).toISOString(),end:new Date(end*1000).toISOString(),granularity:String(granularity)});
   const r=await fetch('https://api.exchange.coinbase.com/products/BTC-USD/candles?'+params,{signal:AbortSignal.timeout(9000)});
@@ -106,10 +122,14 @@ export async function loadPaperTimeframe(symbol,timeframe,market){
   if(symbol==='BTC')return coinbaseChartCandles(timeframe);
   throw Error('This chart timeframe needs a connected market-data provider.');
 }
-export function demoMarket(symbol,message=''){
-  const now=Math.floor(Date.now()/60000)*60,count=30*24*60;
-  const candles=demoCandles(symbol,now-(count-1)*60,count,60,utcDay());
-  return{candles,price:candles.at(-1).close,time:now,source:'Synthetic training feed',demo:true,interval:60,message};
+export function demoMarket(symbol,message='',nowMs=Date.now(),legacy=false){
+  const now=Math.floor(nowMs/60000)*60;
+  // Fixed day start makes overlapping history stable when a workspace is reloaded within the day.
+  const start=Math.floor(now/DAY)*DAY-30*DAY,count=Math.floor((now-start)/60)+1;
+  const candles=legacy?demoCandles(symbol,now-(30*24*60-1)*60,30*24*60,60,utcDay(nowMs))
+    :trainingCandles(symbol,start,count,utcDay(nowMs));
+  return{candles,price:candles.at(-1).close,time:now,source:legacy?'Legacy synthetic training feed':'Synthetic training feed',demo:true,
+    feedVersion:legacy?1:TRAINING_FEED_VERSION,interval:60,message};
 }
 export async function btcQuote(){
   const r=await fetch('https://api.exchange.coinbase.com/products/BTC-USD/ticker',{signal:AbortSignal.timeout(7000)});if(!r.ok)throw Error('Live quote connection interrupted');

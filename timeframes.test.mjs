@@ -41,6 +41,20 @@ test('inactive timeframe caches retain quote extremes and history expiry through
   for(const [tf,cached] of cache)assert.equal(cached.candles.at(-1).time,86400);
 });
 
+test('provider intraday quotes respect session-aligned bars rather than inventing UTC candles', () => {
+  const start=Date.parse('2026-09-24T13:30:00Z')/1000;
+  for(const interval of [3600,14400]){
+    const source=[bar(start,5400,5408,5398,5405)];
+    const within=withQuote(source,{time:start+interval-60,price:5409},interval);
+    assert.equal(within.length,1,'A quote inside the provider bar must not create another candle');
+    assert.equal(within[0].time,start);
+    assert.equal(within[0].high,5409);
+    const next=withQuote(within,{time:start+interval,price:5410},interval);
+    assert.equal(next.length,2);
+    assert.equal(next[1].time,start+interval);
+  }
+});
+
 test('quote updates only the current displayed bucket and preserves history', () => {
   const source = [bar(0, 100, 102, 99, 101)];
   const same = withQuote(source, { time: 120, price: 103 }, TIMEFRAMES['5m']);
