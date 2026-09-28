@@ -705,6 +705,28 @@ label, .form-field { display: block; }
 .figure-home-preview { width:100px;height:98px;margin:0 auto 12px; }
 .journey-figure { width:88px;height:86px;margin-bottom:16px; }
 .wardrobe { margin-top:24px; }
+.skill-profile { margin-top:28px; }
+.skill-explanation { color:var(--muted);font-size:13px;line-height:1.7;max-width:850px; }
+.skill-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:20px 0; }
+.skill-card { --skill-color:var(--muted);display:flex;flex-direction:column;gap:12px;min-width:0;border-top:3px solid var(--skill-color); }
+.skill-building { --skill-color:var(--red); }
+.skill-developing { --skill-color:var(--amber); }
+.skill-strong { --skill-color:var(--green); }
+.skill-card h3,.skill-card p { margin:0; }
+.skill-card p { min-height:44px; }
+.skill-score { display:flex;align-items:baseline;gap:10px;font-size:40px;font-weight:700;color:var(--skill-color); }
+.skill-score span { font-size:12px;font-weight:400;color:var(--muted); }
+.skill-label { color:var(--skill-color);font-size:13px; }
+.skill-meter { height:8px;background:var(--line);border-radius:8px;overflow:hidden; }
+.skill-meter i { display:block;height:100%;background:var(--skill-color);border-radius:8px; }
+.skill-empty { background:repeating-linear-gradient(90deg,var(--line) 0 8px,transparent 8px 12px); }
+.skill-card small { color:var(--muted);line-height:1.6; }
+.skill-card .link { margin-top:auto;align-self:flex-start;text-align:left; }
+.skill-next { display:flex;align-items:center;justify-content:space-between;gap:24px; }
+.skill-next p { max-width:700px; }
+.skill-next .btn { flex-shrink:0; }
+@media(max-width:1100px) { .skill-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:600px) { .skill-grid { grid-template-columns:1fr; }.skill-next { align-items:flex-start;flex-direction:column; } }
 .chart-feed-note { margin:0;padding:10px 14px;background:var(--panel-raised);border-block:1px solid var(--line);color:var(--amber);font-size:11px;line-height:1.5; }
 .wardrobe-layout { display:grid;grid-template-columns:150px minmax(0,1fr);gap:28px;align-items:start; }
 .figure-preview { display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px;background:var(--panel-raised);border:1px solid var(--line);border-radius:12px;text-align:center; }

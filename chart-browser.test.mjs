@@ -181,10 +181,14 @@ try {
   assert(await evaluate(`(async()=>{const {getSession}=await import('/trade-store.js');return getSession('paper-US500').trade.status==='open'})()`),'Connected positions remain untouched by synthetic training mode');
   await evaluate('location.hash="profile"');await until('document.querySelector(".wardrobe")');
   assert.equal(await evaluate('document.querySelectorAll("[data-costume]:not(:disabled)").length'),1,'New users start with the grey figure');
+  assert.equal(await evaluate('document.querySelectorAll(".skill-card").length'),5,'Profile displays five skills');
+  assert.equal(await evaluate('document.querySelectorAll(".skill-unassessed").length'),5,'New users have honest unassessed skills');
   // Complete real lesson records through the service; incorrect answers still complete a lesson.
   await evaluate(`(async()=>{const {requestService}=await import('/market-data.js');for(let id=0;id<3;id++)for(let question=0;question<10;question++)await requestService('/answer',{id,question,answer:0})})()`);
   await command('Page.reload');await until('document.querySelector(".wardrobe")&&document.querySelector("#account-button").onclick');
   assert.equal(await evaluate('document.querySelectorAll("[data-costume]:not(:disabled)").length'),3,'Three lessons unlock the scarf and hoodie');
+  assert.equal(await evaluate('document.querySelector(".skill-card [role=meter]").getAttribute("aria-valuenow")'),'40','Quiz evidence determines the chart-reading score');
+  assert.equal(await evaluate('document.querySelectorAll(".skill-unassessed").length'),4,'Other skills retain their own evidence');
   await evaluate('document.querySelector("[data-costume=hoodie]").click()');
   assert.equal(await evaluate('document.querySelector("[data-costume=hoodie]").getAttribute("aria-pressed")'),'true');
   await command('Page.reload');await until('document.querySelector(".wardrobe")');
@@ -201,6 +205,18 @@ try {
   await command('Page.navigate',{url:'http://127.0.0.1:5188'});
   await until('document.getElementById("app")&&document.getElementById("theme-toggle")');
   await until('document.querySelector("[data-lesson]")');
+  await evaluate('location.hash="profile"');await until('document.querySelector(".skill-profile")');
+  for(const theme of ['light','dark'])for(const width of [390,1440]){
+    await command('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width===390});
+    await evaluate(`document.documentElement.dataset.theme='${theme}'`);
+    assert.equal(await evaluate('document.querySelectorAll(".skill-card").length'),5);
+    assert(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'),'Skill profile fits both themes and viewports');
+    await screenshot(`skills-${theme}-${width}.png`);
+  }
+  await evaluate('document.querySelector(".skill-next [data-lesson]").click()');
+  await until('document.querySelector(".lesson-layout")');
+  assert(await evaluate('document.body.innerText.includes("LESSON 1 OF 21")'),'Personalised next step opens the suggested lesson');
+  await evaluate('location.hash="learn"');await until('document.querySelector(".lesson-search")');
   for(const width of [390,1440])for(const lesson of [19,20,21]){
     await command('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width===390});
     await evaluate(`location.hash='lesson/${lesson}'`);
