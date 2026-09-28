@@ -39,3 +39,11 @@ export function withQuote(candles, quote, interval) {
     low: Math.min(last?.close ?? quote.price, quote.price), close: quote.price, volume: 0 });
   return result;
 }
+
+/** Keep inactive cached views current without extending their history-cache lifetime. */
+export function refreshCachedCharts(cache, quote) {
+  for (const [timeframe, cached] of cache) {
+    if (!Object.hasOwn(TIMEFRAMES, timeframe)) continue;
+    cache.set(timeframe, { ...cached, candles: withQuote(cached.candles, quote, TIMEFRAMES[timeframe]).slice(-180) });
+  }
+}

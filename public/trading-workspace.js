@@ -2,7 +2,7 @@ import {TradingChart} from './trading-chart.js';
 import {INSTRUMENTS,validateOrder,openTrade,advanceTrade,markToMarket,closeTrade,cancelPendingTrade,summarizeTrades} from './trade-engine.js';
 import {loadAccount,getTrades,recordTrade,getSession,saveSession,updateTradeNotes} from './trade-store.js';
 import {loadDaily,loadDailyContext,loadPaperMarket,loadPaperTimeframe,paperQuote,requestService,utcDay,trainingChallenge,demoMarket} from './market-data.js';
-import {TIMEFRAMES,DAILY_TIMEFRAMES,PAPER_TIMEFRAMES,aggregateCandles,withQuote} from './timeframes.js';
+import {TIMEFRAMES,DAILY_TIMEFRAMES,PAPER_TIMEFRAMES,aggregateCandles,withQuote,refreshCachedCharts} from './timeframes.js';
 import {tradesCsv,matchesTradeSearch} from './journal-utils.js';
 import {saveDisplayName} from './accounts.js';
 
@@ -46,6 +46,7 @@ export function renderTrading(container,{mode='daily',onToast=()=>{}}){
         else if(state.trade?.status==='closed'&&!getTrades().some(t=>t.id===state.trade.id))recordTrade({...state.trade,source:loaded.source,verified:true});
       }
       data=loaded;
+      if(mode==='paper')data.candles=withQuote(data.candles,{price:data.price,time:data.time},60);
       if(mode==='daily'&&saved){({trade,cursor=0,speed=1,drawings=[],reasoning='',resultSaved=false,official=null}=saved);}
       if(saved&&!trade){orderType=saved.orderType||'market';entryDraft=saved.entryDraft??null;}
       if(mode==='daily'&&data.ranked&&data.submitted&&!trade){const result=await requestService('/daily/result');if(disposed||token!==generation)return;data.future=result.future;official=result.trade;trade=result.trade;cursor=result.future.length;resultSaved=true;reasoning=trade.reasoning||'';}
@@ -69,10 +70,10 @@ export function renderTrading(container,{mode='daily',onToast=()=>{}}){
   }
   async function switchTimeframe(next){
     if(!(mode==='daily'?DAILY_TIMEFRAMES:PAPER_TIMEFRAMES).includes(next)||!data)return;
-    const token=++switchGeneration,market=instrument.id;
+    const token=++switchGeneration,market=instrument.id,source=data;
     const note=q('#timeframe-note');if(note)note.textContent='Loading '+next+' chart…';
     if(mode==='daily'&&next!=='15m'&&!Array.isArray(data.context)){
-      try{data.context=await loadDailyContext(data);}catch{data.context=[];data.contextLimited=true;}
+      try{source.context=await loadDailyContext(source);}catch{source.context=[];source.contextLimited=true;}
     }
     if(mode==='paper'&&next!=='1m'){
       const cached=timeframeCache.get(next);
@@ -81,6 +82,7 @@ export function renderTrading(container,{mode='daily',onToast=()=>{}}){
       catch(error){if(!disposed&&token===switchGeneration){q('#timeframe-note').textContent='Chart unavailable for '+next;onToast(error.message);}return;}
     }
     if(disposed||token!==switchGeneration||market!==instrument.id)return;
+    if(mode==='paper'&&next!=='1m')viewCandles=withQuote(viewCandles,{price,time:data.time},TIMEFRAMES[next]).slice(-180);
     timeframe=next;persist();
     container.querySelectorAll('[data-timeframe]').forEach(button=>{const selected=button.dataset.timeframe===next;button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));});
     q('.terminal-head div span').textContent=' '+next+(mode==='daily'?' · Replay':' · Paper');
@@ -205,9 +207,10 @@ export function renderTrading(container,{mode='daily',onToast=()=>{}}){
       if(cancelledElsewhere){trade=null;official=null;persist();render();onToast('Pending entry was cancelled in another session.');return;}
       price=quote.price;stale=false;q('#feed-status').textContent=(data.demo?'Training tick · ':'Last quote · ')+stamp(quote.time);
       if(data.connected)q('.account-bar span').innerHTML='<b>Paper balance</b> '+money(balance);
-      const bucket=Math.floor(quote.time/60)*60,last=data.candles.at(-1);
-      if(last.time===bucket){last.high=Math.max(last.high,price);last.low=Math.min(last.low,price);last.close=price;}else data.candles.push({time:bucket,open:last.close,high:Math.max(last.close,price),low:Math.min(last.close,price),close:price,volume:0});
+      data.price=price;data.time=quote.time;
+      data.candles=withQuote(data.candles,quote,60);
       data.candles=data.candles.slice(data.demo?-(30*24*60):-500);
+      refreshCachedCharts(timeframeCache,quote);
       if(timeframe==='1m')chart.setData(chartCandles());
       else if(data.demo){viewCandles=aggregateCandles(data.candles,TIMEFRAMES[timeframe]).slice(-180);timeframeCache.set(timeframe,{time:Date.now(),candles:viewCandles});chart.setData(viewCandles);}
       else {viewCandles=withQuote(viewCandles,quote,TIMEFRAMES[timeframe]).slice(-180);timeframeCache.set(timeframe,{time:Date.now(),candles:viewCandles});chart.setData(viewCandles);}

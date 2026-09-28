@@ -109,6 +109,72 @@ try {
   }
   await evaluate('testChart.destroy()');
   assert.equal(await evaluate('document.querySelector(".wl-chart")'),null,'Chart is disposed on navigation');
+  // Check the actual desks and controls, not just the standalone chart API.
+  await command('Page.navigate',{url:'http://127.0.0.1:5191'});
+  await until('document.querySelector(".hero")&&document.querySelector("#account-button").onclick');
+  await evaluate(`(async()=>{const {TradingChart}=await import('/trading-chart.js');const original=TradingChart.prototype.setData;TradingChart.prototype.setData=function(bars){window.deskChart=this;return original.call(this,bars)}})()`);
+  const openDesk=async page=>{
+    await evaluate(`location.hash='${page}'`);
+    await until('document.querySelector("#use-training-feed")||document.querySelector("#training-mode")');
+    await evaluate('document.querySelector("#use-training-feed")?.click();document.querySelector("#training-mode")?.click()');
+    await until('document.querySelector("#place-order")&&window.deskChart&&!deskChart.destroyed');
+  };
+  await openDesk('practice');
+  for(const theme of ['light','dark']){
+    await evaluate(`document.documentElement.dataset.theme='${theme}';dispatchEvent(new Event('wicklume:theme'))`);
+    for(const tf of ['15m','1h','4h','1d']){
+      await evaluate(`document.querySelector('[data-timeframe="${tf}"]').click()`);
+      await until(`document.querySelector('[data-timeframe="${tf}"]').getAttribute('aria-pressed')==='true'`);await delay(70);
+      assert(await evaluate(`(async()=>{
+        const {getSession}=await import('/trade-store.js');const {utcDay}=await import('/market-data.js');const {aggregateCandles,TIMEFRAMES}=await import('/timeframes.js');
+        const saved=getSession('daily-'+utcDay()+'-training');const d=saved.data;const revealed=[...d.history,...d.future.slice(0,saved.cursor)];
+        const expected='${tf}'==='15m'?revealed:aggregateCandles([...(d.context||[]).filter(c=>c.time<revealed[0].time),...revealed],TIMEFRAMES['${tf}']).slice(-180);
+        const actual=deskChart.series.data();return actual.length===expected.length&&actual.every((c,i)=>['open','high','low','close'].every(k=>c[k]===expected[i][k])&&c.time===expected[i].time)
+      })()`),`${tf} daily chart shows exact revealed OHLC in ${theme} theme`);
+      assert(await evaluate('deskChart.series.data().length>=2'),'Higher daily views have earlier context');
+    }
+  }
+  await evaluate(`document.querySelector('#trade-reasoning').value='I see a higher low and a retest. I will enter at this price, with a stop below the low and a target at the preceding high.';document.querySelector('#trade-reasoning').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#place-order').click()`);
+  await until('!document.querySelector("#next-bar").disabled');
+  for(let step=0;step<8;step++)await evaluate('document.querySelector("#next-bar").click()');
+  for(const tf of ['15m','1h','4h','1d']){
+    await evaluate(`document.querySelector('[data-timeframe="${tf}"]').click()`);await delay(90);
+    assert(await evaluate(`(async()=>{const {getSession}=await import('/trade-store.js');const {utcDay}=await import('/market-data.js');const {aggregateCandles,TIMEFRAMES}=await import('/timeframes.js');const s=getSession('daily-'+utcDay()+'-training');const d=s.data;const revealed=[...d.history,...d.future.slice(0,s.cursor)];const e='${tf}'==='15m'?revealed:aggregateCandles([...(d.context||[]).filter(c=>c.time<revealed[0].time),...revealed],TIMEFRAMES['${tf}']).slice(-180);return s.cursor===8&&deskChart.series.data().length===e.length&&deskChart.series.data().every((c,i)=>c.time===e[i].time&&c.close===e[i].close&&c.high===e[i].high&&c.low===e[i].low)})()`),`${tf} replay excludes unrevealed future after stepping`);
+  }
+  await openDesk('paper');
+  for(const theme of ['light','dark']){
+    await evaluate(`document.documentElement.dataset.theme='${theme}';dispatchEvent(new Event('wicklume:theme'))`);
+    for(const symbol of ['BTC','US500','XAUUSD','GBPUSD']){
+      await evaluate(`document.querySelector('[data-market="${symbol}"]').click()`);
+      await until(`document.querySelector('[data-market="${symbol}"]')?.classList.contains('active')&&document.querySelector('#place-order')`);
+      for(const tf of ['1m','5m','15m','1h','4h','1d']){
+        await evaluate(`document.querySelector('[data-timeframe="${tf}"]').click()`);
+        await until(`document.querySelector('[data-timeframe="${tf}"]').getAttribute('aria-pressed')==='true'`);await delay(60);
+        assert(await evaluate(`(async()=>{const {TIMEFRAMES}=await import('/timeframes.js');const c=deskChart.series.data();return c.length>=2&&c.length<=180&&c.every((b,i)=>b.time%TIMEFRAMES['${tf}']===0&&(!i||b.time>c[i-1].time)&&b.high>=Math.max(b.open,b.close)&&b.low<=Math.min(b.open,b.close))})()`),`${symbol} ${tf} has valid aligned candles in ${theme}`);
+        assert(await evaluate('deskChart.series.options().priceFormat.precision===('+ (symbol==='GBPUSD'?5:symbol==='BTC'?2:symbol==='US500'?2:2) +')'),'Instrument price precision is retained');
+      }
+    }
+  }
+  await screenshot('checked-paper-timeframes.png');
+  await evaluate('location.hash="profile"');await until('document.querySelector(".wardrobe")');
+  assert.equal(await evaluate('document.querySelectorAll("[data-costume]:not(:disabled)").length'),1,'New users start with the grey figure');
+  // Complete real lesson records through the service; incorrect answers still complete a lesson.
+  await evaluate(`(async()=>{const {requestService}=await import('/market-data.js');for(let id=0;id<3;id++)for(let question=0;question<10;question++)await requestService('/answer',{id,question,answer:0})})()`);
+  await command('Page.reload');await until('document.querySelector(".wardrobe")&&document.querySelector("#account-button").onclick');
+  assert.equal(await evaluate('document.querySelectorAll("[data-costume]:not(:disabled)").length'),3,'Three lessons unlock the scarf and hoodie');
+  await evaluate('document.querySelector("[data-costume=hoodie]").click()');
+  assert.equal(await evaluate('document.querySelector("[data-costume=hoodie]").getAttribute("aria-pressed")'),'true');
+  await command('Page.reload');await until('document.querySelector(".wardrobe")');
+  assert.equal(await evaluate('document.querySelector("[data-costume=hoodie]").getAttribute("aria-pressed")'),'true','Outfit persists across reload');
+  for(const theme of ['light','dark'])for(const width of [390,1440]){
+    await command('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width===390});
+    await evaluate(`document.documentElement.dataset.theme='${theme}';dispatchEvent(new Event('wicklume:theme'))`);await delay(80);
+    assert(await evaluate('document.documentElement.scrollWidth<=innerWidth'),'Wardrobe fits mobile and desktop');
+    await evaluate('document.querySelector(".wardrobe").scrollIntoView({block:"start",behavior:"instant"})');await delay(80);
+    await screenshot(`figure-wardrobe-${theme}-${width}.png`);
+  }
+  console.log('PASS: daily 15m/1h/4h/1d revealed OHLC before and after replay; all four paper markets at all six timeframes in both themes; costume locks, unlocks, equip/reload and mobile wardrobe.');
+
   await command('Page.navigate',{url:'http://127.0.0.1:5188'});
   await until('document.getElementById("app")&&document.getElementById("theme-toggle")');
   await mount('./trading-chart.js');

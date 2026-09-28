@@ -51,7 +51,7 @@ export async function initializeAccounts() {
   profile.querySelector('.avatar').textContent = account?.displayName?.slice(0, 1).toUpperCase() || 'W';
   window.addEventListener('wicklume:profile', event => {
     profile.querySelector('b').textContent = event.detail.displayName;
-    profile.querySelector('.avatar').textContent = event.detail.displayName.slice(0, 1).toUpperCase();
+    if (!profile.querySelector('.avatar').classList.contains('figure-badge')) profile.querySelector('.avatar').textContent = event.detail.displayName.slice(0, 1).toUpperCase();
   });
   const reload = () => {
     try { localStorage.setItem('wicklume-account-change', crypto.randomUUID()); } catch { /* Cookie login still works. */ }
