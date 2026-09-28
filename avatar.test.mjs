@@ -15,12 +15,13 @@ test('costumes unlock on distinct completed lessons and stay separate between ac
       assert(unlockedCostumes(progress(costume.lessons)).some(c=>c.id===costume.id));
       if(costume.lessons)assert(!unlockedCostumes(progress(costume.lessons-1)).some(c=>c.id===costume.id));
     }
-    assert.equal(unlockedCostumes({completed:[0,0,-1,18,'1',null]}).length,2);
+    assert.equal(unlockedCostumes({completed:[0,0,-1,21,'1',null]}).length,2);
     assert(equipCostume('scarf',progress(1)));
     setAccountScope('a');assert.equal(selectedCostume(progress(18)).id,'grey');
-    assert(equipCostume('graduate',progress(18)));
+    assert.equal(equipCostume('graduate',progress(18)),false);
+    assert(equipCostume('graduate',progress(21)));
     setAccountScope('b');assert.equal(selectedCostume(progress(18)).id,'grey');
-    setAccountScope('a');assert.equal(selectedCostume(progress(18)).id,'graduate');
+    setAccountScope('a');assert.equal(selectedCostume(progress(21)).id,'graduate');
     assert.equal(selectedCostume(progress(0)).id,'grey','A locked saved costume cannot bypass progress');
     saveSession('avatar',{costume:'<script>bad</script>'});
     assert.equal(selectedCostume(progress(18)).id,'grey');

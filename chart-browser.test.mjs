@@ -200,6 +200,23 @@ try {
 
   await command('Page.navigate',{url:'http://127.0.0.1:5188'});
   await until('document.getElementById("app")&&document.getElementById("theme-toggle")');
+  await until('document.querySelector("[data-lesson]")');
+  for(const width of [390,1440])for(const lesson of [19,20,21]){
+    await command('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width===390});
+    await evaluate(`location.hash='lesson/${lesson}'`);
+    await until(`document.querySelector('.lesson-layout')&&document.body.innerText.includes('LESSON ${lesson} OF 21')`);
+    for(let slide=0;slide<3;slide++){
+      assert(await evaluate('Boolean(document.querySelector(".lesson-visual svg")&&document.querySelector(".worked-example"))'),'New lesson renders its diagram and worked example');
+      assert(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'),'New lesson fits mobile and desktop');
+      if(slide<2)await evaluate('document.querySelector("[data-slide=next]").click()');
+    }
+    await evaluate('document.querySelector("[data-slide=next]").click()');
+    await until('document.querySelector("[data-answer]")');
+    await evaluate('document.querySelector("[data-slide=restart]")?.click();location.hash="learn"');
+    await until('document.querySelector(".lesson-search")');
+    // Reset the saved slide so the next viewport starts at slide one.
+    await evaluate(`(async()=>{const {saveSession}=await import('./trade-store.js');saveSession('lesson-${lesson-1}',{slide:0})})()`);
+  }
   await mount('./trading-chart.js');
   assert.equal(await evaluate('testChart.series.data().length'),80,'Pages loads the bundled ESM library');
   assert.deepEqual(errors,[],'No browser errors');

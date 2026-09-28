@@ -5,12 +5,12 @@ export const COSTUMES = Object.freeze([
   { id: 'scarf', name: 'Blue scarf', lessons: 1 },
   { id: 'hoodie', name: 'Green hoodie', lessons: 3 },
   { id: 'explorer', name: 'Explorer', lessons: 6 },
-  { id: 'graduate', name: 'Graduate', lessons: 18 },
+  { id: 'graduate', name: 'Graduate', lessons: 21 },
 ].map(costume => Object.freeze(costume)));
 
 export function completedLessonCount(progress) {
   return new Set((Array.isArray(progress?.completed) ? progress.completed : [])
-    .filter(id => Number.isInteger(id) && id >= 0 && id < 18)).size;
+    .filter(id => Number.isInteger(id) && id >= 0 && id < 21)).size;
 }
 
 export function unlockedCostumes(progress) {
@@ -54,7 +54,7 @@ export function wardrobeHtml(progress) {
   const selected = selectedCostume(progress), count = completedLessonCount(progress);
   return `<section class="panel wardrobe" aria-labelledby="wardrobe-title">
     <div class="section-heading"><div><div class="eyebrow">YOUR FIGURE</div><h2 id="wardrobe-title">A little character. A little progress.</h2></div></div>
-    <div class="wardrobe-layout"><div class="figure-preview">${avatarSvg(selected.id)}<strong>${selected.name}</strong><span>${count} / 18 lessons complete</span></div>
+    <div class="wardrobe-layout"><div class="figure-preview">${avatarSvg(selected.id)}<strong>${selected.name}</strong><span>${count} / 21 lessons complete</span></div>
     <div><p>Start with a grey figure. Complete lessons to unlock simple costumes, then choose one to wear.</p>
     <div class="costume-grid">${COSTUMES.map(costume => {
       const unlocked = count >= costume.lessons, equipped = selected.id === costume.id;

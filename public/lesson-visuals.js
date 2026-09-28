@@ -279,6 +279,24 @@ function biasLesson(slide) {
     'A decision checklist interrupts urgency and brings attention back to observable evidence and planned risk.');
 }
 
+function advancedVisual(id, slide) {
+  if (id === 18) {
+    const y = value => 280 - (value - 100) * 11;
+    const levels = [[120,'Swing high 120'],[112.36,'38.2%: 112.36'],[110,'50%: 110'],[107.64,'61.8%: 107.64'],[100,'Swing low 100']];
+    return visual(['Fibonacci: measure the chosen swing','Calculate the pullback prices','A reference level needs a trade plan'][slide],
+      levels.map(([price,name])=>line(45,y(price),500,y(price),price===110?green:cyan,'5 5')+label(515,y(price)+4,name,muted,13)).join('')+
+      `<path d="M65 280L240 60L375 170L460 125" stroke="${green}" stroke-width="3" fill="none"/>`+
+      label(45,315,slide===2?'Touch alone is not a trigger. Define invalidation and size.':'Rise 100 to 120: subtract a fraction of the 20-point swing.',muted,12),
+      'An invented rise from 100 to 120 with a pullback to 110, half of the original move.');
+  }
+  const rows = id === 19
+    ? [['CONTEXT','Higher lows on the chosen timeframe'],['TRIGGER','Close above the pullback high'],['TRADE','Entry 110 / stop 107 / target 116'],['CHECK','Risk 3, reward 6 per share before costs']]
+    : [['RULE CARD','Market, timeframe, setup and risk budget'],['SESSION CAP','At most two entries in this example'],['LOSS LIMIT','Stop at 60 realised loss units in this example'],['REVIEW','Five decisions: process and outcome separately']];
+  return visual((id===19?['Create a setup: context and trigger','Create a setup: prices and size','Create a setup: the no-trade decision']:['Trading rules: a measurable card','Trading rules: session stopping conditions','Trading rules: practise and review'])[slide],
+    rows.map(([head,body],i)=>box(35,30+i*68,690,56)+label(50,64+i*68,head,cyan,12)+label(195,64+i*68,body,muted,12)).join('')+label(45,320,id===19?'Missing a condition? Stand aside.':'A win can break a rule; a loss can follow it.',green,12),
+    id===19?'A complete invented setup specifies context, trigger, trade prices and a risk check.':'An example rule card defines session limits and separates adherence from results.');
+}
+
 export function lessonVisual(lessonIndex, slideIndex) {
   switch (lessonIndex) {
     case 0: return candleLesson(slideIndex);
@@ -299,6 +317,7 @@ export function lessonVisual(lessonIndex, slideIndex) {
     case 15: return flowLesson(slideIndex);
     case 16: return journalLesson(slideIndex);
     case 17: return biasLesson(slideIndex);
+    case 18: case 19: case 20: return advancedVisual(lessonIndex, slideIndex);
     default: return '';
   }
 }

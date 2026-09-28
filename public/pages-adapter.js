@@ -5,10 +5,11 @@
   const originalFetch = window.fetch.bind(window);
   const contentUrl = new URL('./site-data.json', document.currentScript.src);
   contentUrl.search = new URL(document.currentScript.src).search;
+  let lessonCount = 0;
   const content = originalFetch(contentUrl).then(response => {
     if (!response.ok) throw Error('Unable to load lessons');
     return response.json();
-  });
+  }).then(data => { lessonCount = data.lessons.length; return data; });
   const storageKey = 'wicklume-pages-progress-v1';
   const initial = () => ({ completed: [], challenges: [], attempts: 0, correct: 0, days: [], answers: {} });
   let memoryProgress = initial(), unsaved = false, warned = false;
@@ -22,10 +23,10 @@
     try {
       const value = JSON.parse(localStorage.getItem(storageKey));
       if (!value || !Array.isArray(value.completed) || !Array.isArray(value.challenges) || !Array.isArray(value.days) || !Number.isInteger(value.attempts) || value.attempts < 0 || !Number.isInteger(value.correct) || value.correct < 0 || value.correct > value.attempts || (value.answers && (typeof value.answers !== 'object' || Array.isArray(value.answers)))) return initial();
-      value.completed = [...new Set(value.completed.filter(id => Number.isInteger(id) && id >= 0 && id < 18))];
+      value.completed = [...new Set(value.completed.filter(id => Number.isInteger(id) && id >= 0 && id < lessonCount))];
       value.days = [...new Set(value.days.filter(day => typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day)))];
       value.answers ??= {};
-      for (const [id, answers] of Object.entries(value.answers)) if (!/^\d+$/.test(id) || Number(id) >= 18 || !Array.isArray(answers) || answers.length > 10 || answers.some(answer => !Number.isInteger(answer) || answer < 0 || answer > 2)) return initial();
+      for (const [id, answers] of Object.entries(value.answers)) if (!/^\d+$/.test(id) || Number(id) >= lessonCount || !Array.isArray(answers) || answers.length > 10 || answers.some(answer => !Number.isInteger(answer) || answer < 0 || answer > 2)) return initial();
       memoryProgress = value;
       return structuredClone(value);
     } catch { warnStorage(); return structuredClone(memoryProgress); }
