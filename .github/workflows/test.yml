@@ -13,3 +13,5 @@ jobs:
         with:
           node-version: '24'
       - run: npm test
+      - run: npm run build:pages
+      - run: npm run test:charts

@@ -22,6 +22,10 @@ When market data is unavailable, the browser can show an explicitly labeled synt
 
 ## Appearance and accounts
 
+Challenge and paper charts use the bundled **TradingView Lightweight Charts 5.2.1** library. Candles, volume, crosshair, price/time axes, mouse zoom/pan and touch navigation use its native canvas renderer; saved drawings and draggable trade levels use a time/price anchored SVG overlay. Replay passes only revealed bars into the library. The existing price feeds and trade execution model still determine data and fills; this library supplies no TradingView market data. Journal snapshots embed the canvas image and annotations in the existing SVG format, so older journal entries remain readable.
+
+The standalone ESM distribution is checked in as `public/lightweight-charts.js`; no npm install or external CDN is required. Its Apache 2.0 license and attribution notice are included beside it and in the Pages build. Charts show the TradingView link and copyright notice. To update it, obtain the official standalone production ESM package, replace the bundled file and corresponding license/notice, then run the browser checks.
+
 The header's **Light mode / Dark mode** button changes the whole workspace, including live charts. The first visit follows the device preference; choosing a theme saves it in the browser. Theme controls work on GitHub Pages without a server.
 
 **Sign in** opens email/password login or account creation. Passwords must be 12–128 characters and are stored using salted scrypt hashes. Account sessions use hashed random tokens in SQLite and HttpOnly cookies, expire after seven days, and are revoked on sign-out. Login and registration attempts are rate limited. Email addresses are private; display names appear in verified leaderboards. The account dialog lets you update your display name or change your password after entering the current one. Changing a password revokes other device logins while retaining account progress and trades. Account names remain authoritative when placing trades, and leaderboard name changes save to the server when connected.
@@ -41,6 +45,8 @@ npm.cmd test
 npm.cmd run build:pages
 npm.cmd run preview:pages
 ```
+
+For the chart interaction regression checks, build Pages first and run `npm.cmd run test:charts`. It launches headless Google Chrome, tests both server and Pages builds, and writes ignored screenshots to `dist/`. Set `CHROME_PATH` if Chrome is installed in a different location. Checks cover the replay boundary, candle/volume updates, draggable and locked trade levels, drawing tools, anchors across timeframe changes, native pan/zoom, snapshot decoding, themes, mobile resizing and chart cleanup.
 
 The Pages preview opens at `http://127.0.0.1:5188`. Pushing `main` runs the repository checks and publishes `dist/` to GitHub Pages. Pages stores lesson progress and the journal in each visitor's browser; it cannot run the SQLite service. Use the local server or deploy the Node service to activate shared results and AI feedback.
 

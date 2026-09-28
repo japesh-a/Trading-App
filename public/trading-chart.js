@@ -1,8 +1,5 @@
-/**
- * A small, self-contained SVG chart for the practice and paper trading desks.
- * Only candles passed to setData are rendered. Drawing anchors use UTC time and
- * price, so adding replay bars, resizing, and zooming never move a user's plan.
- */
+/** Lightweight Charts renders market data; SVG annotations retain saved time/price anchors. */
+import { createChart, CandlestickSeries, HistogramSeries } from './lightweight-charts.js';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const UP = '#32d5af';
 const DOWN = '#f4778c';
@@ -103,8 +100,11 @@ export class TradingChart {
     this.wrapper.innerHTML = `<style>
       .wl-chart { position:relative;width:100%;height:100%;min-height:320px;overflow:hidden;background:#0a1220;border:1px solid #233047;border-radius:12px;box-sizing:border-box;color:#a2b2c8;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
       .wl-chart * { box-sizing:border-box; }
-      .wl-chart__svg { display:block;width:100%;height:100%;min-height:320px;touch-action:none;user-select:none;outline:none; }
-      .wl-chart__svg:focus-visible { outline:2px solid #77adff;outline-offset:-3px;border-radius:12px; }
+      .wl-chart__surface { position:absolute;inset:0 0 20px;z-index:0; }
+      .wl-chart__svg { position:absolute;inset:0 0 20px;z-index:1;pointer-events:none;display:block;width:100%;height:calc(100% - 20px);touch-action:none;user-select:none;outline:none; }
+      .wl-chart__readout,.wl-chart__hint { z-index:2; }
+      .wl-chart__reset { z-index:3; }
+      .wl-chart:focus-visible { outline:2px solid #77adff;outline-offset:-3px;border-radius:12px; }
       .wl-chart__readout { position:absolute;top:14px;left:15px;right:80px;display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;pointer-events:none;line-height:1.25;font-size:10px;font-variant-numeric:tabular-nums; }
       .wl-chart__symbol { font-size:11px;font-weight:750;letter-spacing:.08em;color:#e1ebfa; }
       .wl-chart__ohlc { color:#8d9db5;white-space:nowrap; }
@@ -112,8 +112,10 @@ export class TradingChart {
       .wl-chart__reset { position:absolute;top:8px;right:8px;min-height:28px;border:1px solid #2c3d57;background:#111f32;color:#a9bdd8;border-radius:6px;padding:4px 8px;cursor:pointer;font:600 10px/1.2 Inter,system-ui,sans-serif; }
       .wl-chart__reset:hover { background:#20334e;color:#e8f1ff; }
       .wl-chart__reset:focus-visible { outline:2px solid #77adff;outline-offset:2px; }
-      .wl-chart__hint { position:absolute;left:14px;bottom:34px;font-size:9px;color:#61758f;pointer-events:none;letter-spacing:.02em; }
+      .wl-chart__hint { position:absolute;left:60px;bottom:54px;font-size:9px;color:#61758f;pointer-events:none;letter-spacing:.02em; }
       .wl-chart[data-tool="trend"] .wl-chart__svg,.wl-chart[data-tool="fib"] .wl-chart__svg,.wl-chart[data-tool="horizontal"] .wl-chart__svg,.wl-chart[data-tool="label"] .wl-chart__svg { cursor:crosshair; }
+      .wl-chart__svg [data-level], .wl-chart__svg [data-drawing] { pointer-events:all; }
+      .wl-chart__attribution { position:absolute;bottom:0;left:0;right:0;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted,#a2b2c8);font:8px/20px system-ui;padding:0 8px; }
       .wl-chart__live { position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%); }
       @media(max-width:600px) { .wl-chart__readout { top:12px;gap:4px 8px; }.wl-chart__ohlc { font-size:9px; }.wl-chart__hint { font-size:8px; } }
     </style>
@@ -124,20 +126,76 @@ export class TradingChart {
     <span class="wl-chart__live" role="status" aria-live="polite"></span>`;
     this.container.append(this.wrapper);
     this.svg = this.wrapper.querySelector('svg');
+    this.surface = document.createElement('div');
+    this.surface.className = 'wl-chart__surface';
+    this.wrapper.insertBefore(this.surface, this.svg);
+    this.wrapper.tabIndex = 0;
+    this.wrapper.setAttribute('role', 'application');
+    this.wrapper.setAttribute('aria-label', this.svg.getAttribute('aria-label'));
+    this.svg.removeAttribute('tabindex');
+    this.svg.setAttribute('aria-hidden', 'true');
+    this.engine = createChart(this.surface, {
+      width: this.width, height: this.height,
+      layout: { attributionLogo: true, fontFamily: 'Inter, system-ui, sans-serif', fontSize: 11 },
+      rightPriceScale: { minimumWidth: 76, scaleMargins: { top: .16, bottom: .24 } },
+      timeScale: { timeVisible: true, secondsVisible: false, rightOffset: 4, minBarSpacing: 2, lockVisibleTimeRangeOnResize: true },
+      localization: { locale: 'en-GB', timeFormatter: time => this.dateLabel(time * 1000, true) },
+      crosshair: { mode: 0 }
+    });
+    this.series = this.engine.addSeries(CandlestickSeries, {
+      upColor: UP, downColor: DOWN, wickUpColor: UP, wickDownColor: DOWN, borderVisible: false,
+      priceFormat: { type: 'price', precision: this.decimals, minMove: 10 ** -this.decimals },
+      autoscaleInfoProvider: base => {
+        const info = base();
+        if (info && !this.drag) {
+          const prices = Object.values(this.levels);
+          info.priceRange.minValue = Math.min(info.priceRange.minValue, ...prices);
+          info.priceRange.maxValue = Math.max(info.priceRange.maxValue, ...prices);
+          this.autoscaleRange = { ...info.priceRange };
+        }
+        if (info && this.drag && this.autoscaleRange) info.priceRange = { ...this.autoscaleRange };
+        return info;
+      }
+    });
+    this.volumeSeries = this.engine.addSeries(HistogramSeries, {
+      priceFormat: { type: 'volume' }, priceScaleId: 'volume', lastValueVisible: false, priceLineVisible: false
+    });
+    this.volumeSeries.priceScale().applyOptions({ scaleMargins: { top: .84, bottom: .02 } });
+    // Native price-axis dragging and autoscaling must also reposition annotations.
+    this.series.attachPrimitive({ updateAllViews: () => this.schedule(), paneViews: () => [] });
+    this.engine.timeScale().subscribeVisibleLogicalRangeChange(range => {
+      if (!range || this.destroyed) return;
+      this.viewStart = range.from;
+      this.viewCount = range.to - range.from;
+      this.appliedView = { from: range.from, to: range.to };
+      this.schedule();
+    });
+    this.engine.subscribeCrosshairMove(event => {
+      if (this.destroyed) return;
+      this.hover = event.point || null;
+      this.schedule();
+    });
+    this.attribution = document.createElement('a');
+    this.attribution.className = 'wl-chart__attribution';
+    this.attribution.href = 'https://www.tradingview.com/';
+    this.attribution.target = '_blank';
+    this.attribution.rel = 'noopener noreferrer';
+    this.attribution.textContent = 'TradingView Lightweight Charts™ · Copyright (с) 2025 TradingView, Inc.';
+    this.wrapper.append(this.attribution);
+    this.applyTheme();
     this.readout = this.wrapper.querySelector('.wl-chart__ohlc');
     this.hint = this.wrapper.querySelector('.wl-chart__hint');
     this.live = this.wrapper.querySelector('.wl-chart__live');
     this.wrapper.querySelector('.wl-chart__symbol').textContent = this.symbol;
     this.listen(this.svg, 'pointerdown', event => this.pointerDown(event));
-    this.listen(this.svg, 'pointermove', event => this.pointerMove(event));
-    this.listen(this.svg, 'pointerup', event => this.pointerUp(event));
-    this.listen(this.svg, 'pointercancel', event => this.pointerUp(event, true));
+    this.listen(window, 'pointermove', event => { if (this.drag || this.svg.contains(event.target)) this.pointerMove(event); });
+    this.listen(window, 'pointerup', event => this.pointerUp(event));
+    this.listen(window, 'pointercancel', event => this.pointerUp(event, true));
     this.listen(this.svg, 'pointerleave', () => { if (!this.drag) { this.hover = null; this.schedule(); } });
-    this.listen(this.svg, 'wheel', event => this.wheel(event), { passive: false });
-    this.listen(this.svg, 'keydown', event => this.keyDown(event));
+    this.listen(this.wrapper, 'keydown', event => this.keyDown(event));
     this.listen(this.svg, 'dblclick', event => { if (this.tool === 'cursor' && !event.target.closest('[data-level],[data-drawing]')) this.resetView(); });
     this.listen(this.wrapper.querySelector('button'), 'click', () => this.resetView());
-    this.listen(window, 'wicklume:theme', () => this.schedule());
+    this.listen(window, 'wicklume:theme', () => { this.applyTheme(); this.schedule(); });
     if (typeof ResizeObserver !== 'undefined') {
       this.observer = new ResizeObserver(entries => this.resize(entries[0]?.contentRect));
       this.observer.observe(this.container);
@@ -155,18 +213,28 @@ export class TradingChart {
   resize(contentBounds) {
     if (this.destroyed) return;
     const bounds = contentBounds || { width: this.container.clientWidth, height: this.container.clientHeight };
-    this.width = Math.max(280, Math.round(bounds.width || 800));
-    this.height = Math.max(320, Math.round(bounds.height || 440));
+    this.width = Math.max(278, Math.round(bounds.width || 800) - 2);
+    this.height = Math.max(298, Math.round(bounds.height || 440) - 22);
     // An unstyled container has the wrapper's minimum height. The host may set
     // any explicit height; the SVG always fits that size without layout loops.
-    this.wrapper.style.height = `${this.height}px`;
+    this.wrapper.style.height = `${this.height + 22}px`;
+    this.engine.resize(this.width, this.height);
     this.svg.setAttribute('viewBox', `0 0 ${this.width} ${this.height}`);
     this.schedule();
   }
 
   setData(candles) {
     const wasFollowing = !this.candles.length || this.viewStart + this.viewCount >= this.candles.length - 1;
+    const previous = this.candles;
     this.candles = candlesFrom(candles);
+    if (!previous.length) this.viewCount = Math.min(72, Math.max(10, this.candles.length + 4));
+    const data = this.candles.map(candle => ({ ...candle, time: candle.time / 1000 }));
+    const volume = data.map(candle => ({ time: candle.time, value: candle.volume, color: candle.close >= candle.open ? '#32d5af55' : '#f4778c55' }));
+    const same = (a, b) => a && b && ['time','open','high','low','close','volume'].every(key => a[key] === b[key]);
+    const incremental = previous.length && this.candles.length >= previous.length && this.candles.length <= previous.length + 1 && previous.slice(0,-1).every((candle,index) => same(candle,this.candles[index])) && previous.at(-1).time === this.candles[previous.length-1]?.time;
+    if (incremental) {
+      for (let index = previous.length-1; index < data.length; index++) { this.series.update(data[index]); this.volumeSeries.update(volume[index]); }
+    } else { this.series.setData(data); this.volumeSeries.setData(volume); }
     if (wasFollowing) this.viewStart = Math.max(0, this.candles.length - this.viewCount + 4);
     else this.constrainView();
     this.schedule();
@@ -176,6 +244,7 @@ export class TradingChart {
     this.levels = Object.fromEntries(['entry', 'stopLoss', 'takeProfit'].flatMap(key =>
       finite(levels[key]) ? [[key, Number(levels[key])]] : []));
     this.editable = Boolean(editable);
+    this.series.applyOptions({});
     this.schedule();
   }
 
@@ -183,6 +252,7 @@ export class TradingChart {
     this.tool = ['cursor', 'trend', 'fib', 'horizontal', 'label'].includes(tool) ? tool : 'cursor';
     this.draft = null;
     this.wrapper.dataset.tool = this.tool;
+    this.svg.style.pointerEvents = this.tool === 'cursor' ? 'none' : 'auto';
     this.onToolChange(this.tool);
     this.hint.textContent = {
       cursor: 'SCROLL TO ZOOM · DRAG TO PAN',
@@ -208,7 +278,8 @@ export class TradingChart {
   getDrawings() { return copy(this.drawings); }
 
   resetView() {
-    this.viewCount = 72;
+    this.series.priceScale().applyOptions({ autoScale: true });
+    this.viewCount = Math.min(72, Math.max(10, this.candles.length + 4));
     this.viewStart = Math.max(0, this.candles.length - this.viewCount + 4);
     this.hover = null;
     this.schedule();
@@ -219,32 +290,28 @@ export class TradingChart {
     this.viewStart = clamp(this.viewStart, -4, Math.max(0, this.candles.length - Math.min(this.viewCount, 8)));
   }
 
+  applyTheme() {
+    const light = document.documentElement.dataset.theme === 'light';
+    this.engine.applyOptions({
+      layout: { background: { type: 'solid', color: light ? '#ffffff' : '#0a1220' }, textColor: light ? '#52657c' : INK },
+      grid: { vertLines: { color: light ? '#e4eaf2' : '#152237' }, horzLines: { color: light ? '#e4eaf2' : '#17253a' } },
+      rightPriceScale: { borderColor: light ? '#ccd7e5' : '#233047' },
+      timeScale: { borderColor: light ? '#ccd7e5' : '#233047' }
+    });
+    this.series.applyOptions({ upColor: light ? '#087b65' : UP, downColor: light ? '#b6324d' : DOWN,
+      wickUpColor: light ? '#087b65' : UP, wickDownColor: light ? '#b6324d' : DOWN });
+  }
+
   geometry() {
-    const right = this.width < 480 ? 76 : 92;
-    return { left: 10, top: this.width < 480 ? 57 : 43, right: this.width - right,
-      bottom: this.height - 104, volumeTop: this.height - 91, volumeBottom: this.height - 34,
-      width: this.width - right - 10 };
+    const right = this.engine.timeScale().width();
+    return { left: 0, top: 0, right, bottom: this.height - this.engine.timeScale().height(), width: right };
   }
 
-  range() {
-    if (this.renderRange) return this.renderRange;
-    if (this.drag?.range) return this.drag.range;
-    const from = Math.max(0, Math.floor(this.viewStart));
-    const to = Math.min(this.candles.length, Math.ceil(this.viewStart + this.viewCount));
-    const visible = this.candles.slice(from, to);
-    const values = visible.flatMap(candle => [candle.low, candle.high]).concat(Object.values(this.levels));
-    if (!values.length) return { min: 0, max: 100 };
-    let min = Math.min(...values), max = Math.max(...values);
-    const span = max - min || Math.max(Math.abs(max) * 0.01, 1);
-    min -= span * 0.15;
-    max += span * 0.15;
-    return { min, max };
-  }
-
-  x(index) { const g = this.geometry(); return g.left + ((index - this.viewStart + 0.5) / this.viewCount) * g.width; }
-  y(price) { const g = this.geometry(), r = this.range(); return g.bottom - (price - r.min) / (r.max - r.min) * (g.bottom - g.top); }
-  priceAt(y) { const g = this.geometry(), r = this.range(); return r.min + (g.bottom - y) / (g.bottom - g.top) * (r.max - r.min); }
-  indexAt(x) { const g = this.geometry(); return this.viewStart + (x - g.left) / g.width * this.viewCount - 0.5; }
+  range() { return { min: this.priceAt(this.geometry().bottom), max: this.priceAt(0) }; }
+  x(index) { return this.engine.timeScale().logicalToCoordinate(index) ?? -10000; }
+  y(price) { return this.series.priceToCoordinate(price) ?? -10000; }
+  priceAt(y) { return this.series.coordinateToPrice(y) ?? 0; }
+  indexAt(x) { return this.engine.timeScale().coordinateToLogical(x) ?? 0; }
 
   interval() {
     const length = this.candles.length;
@@ -303,7 +370,7 @@ export class TradingChart {
   pointerDown(event) {
     if (event.button !== 0 || this.destroyed || !this.candles.length) return;
     event.preventDefault();
-    this.svg.focus({ preventScroll: true });
+    this.wrapper.focus({ preventScroll: true });
     const point = this.point(event);
     this.pointers.set(event.pointerId, point);
     try { this.svg.setPointerCapture(event.pointerId); } catch { /* detached SVG */ }
@@ -403,6 +470,7 @@ export class TradingChart {
       this.placeDrawing(point);
     }
     this.drag = null;
+    this.series.applyOptions({});
     this.svg.style.cursor = '';
     if (event.pointerType === 'touch') this.hover = null;
     this.schedule();
@@ -499,76 +567,20 @@ export class TradingChart {
   }
 
   chartSvg(snapshot = false) {
-    const g = this.geometry(), range = this.range();
-    this.renderRange = range;
-    const span = range.max - range.min;
-    const rawStep = span / (this.height < 390 ? 5 : 6);
-    const magnitude = 10 ** Math.floor(Math.log10(rawStep || 1));
-    const normalized = rawStep / magnitude;
-    const step = (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10) * magnitude;
-    const parts = [
-      `<defs><clipPath id="${this.id}-plot"><rect x="${g.left}" y="${g.top}" width="${g.width}" height="${g.bottom - g.top}"/></clipPath><clipPath id="${this.id}-volume"><rect x="${g.left}" y="${g.volumeTop}" width="${g.width}" height="${g.volumeBottom - g.volumeTop}"/></clipPath></defs>`,
-      '<rect width="100%" height="100%" fill="#0a1220"/>',
-      `<g font-family="Inter,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-variant-numeric="tabular-nums">`,
-      line(g.right, g.top - 7, g.right, this.height - 27, '#233047'),
-      line(g.left, g.volumeTop - 7, g.right, g.volumeTop - 7, '#1a293e'),
-      line(g.left, g.volumeBottom + 6, this.width - 8, g.volumeBottom + 6, '#233047')
-    ];
-    for (let value = Math.ceil(range.min / step) * step, count = 0; value <= range.max && count < 20; value += step, count++) {
-      const y = this.y(value);
-      parts.push(line(g.left, y, g.right, y, '#17253a'), text(g.right + 9, y + 3, this.formatPrice(value), '#7388a4', 10));
-    }
-    const stride = g.width / this.viewCount;
-    const timeStep = Math.max(1, Math.ceil(100 / stride));
-    const startIndex = Math.max(0, Math.floor(this.viewStart));
-    const endIndex = Math.min(this.candles.length - 1, Math.ceil(this.viewStart + this.viewCount));
-    for (let index = Math.ceil(startIndex / timeStep) * timeStep; index <= endIndex; index += timeStep) {
-      const x = this.x(index);
-      if (x > g.right || x < g.left) continue;
-      parts.push(line(x, g.top, x, g.volumeBottom, '#152237'), text(x, this.height - 10, this.dateLabel(this.candles[index].time), '#758ba7', 10, 'text-anchor="middle"'));
-    }
-    if (!this.candles.length) {
-      parts.push(text(g.left + g.width / 2, this.height / 2 - 8, 'Chart ready for market data', '#b0c1d8', 13, 'text-anchor="middle"'),
-        text(g.left + g.width / 2, this.height / 2 + 15, 'Candles appear when a session is loaded.', '#647b98', 10, 'text-anchor="middle"'));
-    }
-    parts.push(`<g clip-path="url(#${this.id}-plot)">`);
-    const levels = this.levels;
+    const g = this.geometry(), levels = this.levels;
+    const parts = [`<defs><clipPath id="${this.id}-plot"><rect x="0" y="0" width="${g.width}" height="${g.bottom}"/></clipPath></defs><g font-family="Inter,system-ui,sans-serif" clip-path="url(#${this.id}-plot)">`];
     if (finite(levels.entry)) {
       [['stopLoss', DOWN], ['takeProfit', UP]].forEach(([key, color]) => {
         if (!finite(levels[key])) return;
         const y1 = this.y(levels.entry), y2 = this.y(levels[key]);
-        parts.push(`<rect x="${g.left + g.width * 0.7}" y="${Math.min(y1, y2)}" width="${g.width * 0.3}" height="${Math.max(1, Math.abs(y1 - y2))}" fill="${color}" fill-opacity="0.065"/>`);
+        parts.push(`<rect x="${g.width * .7}" y="${Math.min(y1,y2)}" width="${g.width * .3}" height="${Math.max(1,Math.abs(y1-y2))}" fill="${color}" fill-opacity=".065"/>`);
       });
-    }
-    const candleWidth = clamp(stride * 0.65, 1.2, 16);
-    for (let index = startIndex; index <= endIndex; index++) {
-      const candle = this.candles[index], x = this.x(index), color = candle.close >= candle.open ? UP : DOWN;
-      const top = Math.min(this.y(candle.open), this.y(candle.close));
-      const height = Math.max(1.2, Math.abs(this.y(candle.open) - this.y(candle.close)));
-      parts.push(line(x, this.y(candle.high), x, this.y(candle.low), color, 'stroke-width="1"'),
-        `<rect x="${x - candleWidth / 2}" y="${top}" width="${candleWidth}" height="${height}" rx="0.6" fill="${color}"/>`);
     }
     parts.push(this.drawings.map(drawing => this.drawingSvg(drawing, snapshot)).join(''));
     if (!snapshot && this.draft) {
-      const start = { x: this.x(this.indexFor(this.draft.time)), y: this.y(this.draft.price) };
-      if (this.hover) parts.push(line(start.x, start.y, this.hover.x, this.hover.y, '#91bdff', 'stroke-dasharray="4 4" stroke-width="1.5"'));
-      parts.push(`<circle cx="${start.x}" cy="${start.y}" r="4" fill="#91bdff"/>`);
-    }
-    parts.push('</g>');
-    const visible = this.candles.slice(startIndex, endIndex + 1);
-    const maximumVolume = Math.max(1, ...visible.map(candle => candle.volume));
-    parts.push(`<g clip-path="url(#${this.id}-volume)">`);
-    for (let index = startIndex; index <= endIndex; index++) {
-      const candle = this.candles[index], barHeight = candle.volume / maximumVolume * (g.volumeBottom - g.volumeTop);
-      parts.push(`<rect x="${this.x(index) - candleWidth / 2}" y="${g.volumeBottom - barHeight}" width="${candleWidth}" height="${barHeight}" fill="${candle.close >= candle.open ? UP : DOWN}" fill-opacity="0.28"/>`);
-    }
-    parts.push('</g>', text(g.right + 9, g.volumeTop + 9, 'VOL', '#617793', 9));
-    const latest = this.candles.at(-1);
-    if (latest) {
-      const y = this.y(latest.close), color = latest.close >= latest.open ? UP : DOWN;
-      if (y >= g.top && y <= g.bottom) parts.push(line(g.left, y, g.right, y, color, 'stroke-dasharray="2 4" stroke-opacity="0.45"'),
-        `<rect x="${g.right + 1}" y="${y - 9}" width="${this.width - g.right - 6}" height="18" rx="3" fill="${color}"/>`,
-        text(g.right + 7, y + 3, this.formatPrice(latest.close), '#09251f', 10, 'font-weight="650"'));
+      const x = this.x(this.indexFor(this.draft.time)), y = this.y(this.draft.price);
+      if (this.hover) parts.push(line(x,y,this.hover.x,this.hover.y,'#91bdff','stroke-dasharray="4 4"'));
+      parts.push(`<circle cx="${x}" cy="${y}" r="4" fill="#91bdff"/>`);
     }
     [['entry', '#8aaaf8', 'ENTRY'], ['stopLoss', DOWN, 'SL'], ['takeProfit', UP, 'TP']].forEach(([key, color, name]) => {
       if (!finite(levels[key])) return;
@@ -584,41 +596,18 @@ export class TradingChart {
         !snapshot && this.editable ? `${line(labelX + labelWidth - 12, y - 3, labelX + labelWidth - 6, y - 3, color)}${line(labelX + labelWidth - 12, y + 1, labelX + labelWidth - 6, y + 1, color)}${line(labelX + labelWidth - 12, y + 5, labelX + labelWidth - 6, y + 5, color)}` : '',
         '</g>');
     });
-    if (!snapshot && this.hover && this.inPlot(this.hover) && !['level', 'drawing', 'pan'].includes(this.drag?.type)) {
-      const index = clamp(Math.round(this.indexAt(this.hover.x)), 0, this.candles.length - 1);
-      const candle = this.candles[index];
-      if (candle) {
-        const x = this.x(index), y = this.hover.y;
-        parts.push(`<g pointer-events="none">${line(x, g.top, x, g.volumeBottom, '#7c90aa', 'stroke-width="0.7" stroke-dasharray="3 4"')}${line(g.left, y, g.right, y, '#7c90aa', 'stroke-width="0.7" stroke-dasharray="3 4"')}`,
-          `<rect x="${g.right + 1}" y="${y - 10}" width="${this.width - g.right - 4}" height="20" rx="3" fill="#344760"/>`,
-          text(g.right + 7, y + 3, this.formatPrice(this.priceAt(y)), '#eff5ff', 10),
-          `<rect x="${clamp(x - 69, g.left, Math.max(g.left, g.right - 138))}" y="${this.height - 25}" width="138" height="21" rx="3" fill="#2a3a51"/>`,
-          text(clamp(x - 69, g.left, Math.max(g.left, g.right - 138)) + 69, this.height - 11, this.dateLabel(candle.time, true), '#dfebfc', 9, 'text-anchor="middle"'), '</g>');
-      }
-    }
-    if (snapshot) {
-      parts.push(text(15, 24, this.symbol, '#e1ebfa', 11, 'font-weight="700"'),
-        text(this.width - 14, 24, latest ? this.dateLabel(latest.time, true) : '', '#7e94b0', 10, 'text-anchor="end"'),
-        text(g.left + 4, g.volumeTop + 12, 'WICKLUME / TRADE JOURNAL', '#415875', 9, 'letter-spacing="1"'));
-    }
     parts.push('</g>');
-    this.renderRange = null;
     const svg = parts.join('');
-    if (document.documentElement.dataset.theme !== 'light') return svg;
-    const palette = {
-      '#0a1220': '#ffffff', '#233047': '#ccd7e5', '#1a293e': '#d4deea',
-      '#17253a': '#e4eaf2', '#152237': '#e4eaf2', '#14253e': '#edf3fa',
-      '#142139': '#edf3fa', '#20395b': '#dce8f6', '#a2b2c8': '#52657c',
-      '#b0c1d8': '#354d68', '#d8e8ff': '#263f5c', '#e1ebfa': '#17283d',
-      '#7388a4': '#52657c', '#758ba7': '#52657c', '#647b98': '#52657c',
-      '#617793': '#52657c', '#7e94b0': '#52657c', '#415875': '#607189',
-      '#32d5af': '#087b65', '#f4778c': '#b6324d', '#91bdff': '#2167b5',
-    };
-    return svg.replace(/#[0-9a-f]{6}\b/g, color => palette[color] || color);
+    return document.documentElement.dataset.theme === 'light' ? svg.replace(/#142139/g,'#edf3fa').replace(/#14253e/g,'#edf3fa').replace(/#d8e8ff/g,'#263f5c') : svg;
   }
 
   render() {
     if (this.destroyed) return;
+    const target = { from: this.viewStart, to: this.viewStart + this.viewCount };
+    if (this.candles.length && (!this.appliedView || Math.abs(target.from-this.appliedView.from) > .001 || Math.abs(target.to-this.appliedView.to) > .001)) {
+      this.appliedView = target;
+      this.engine.timeScale().setVisibleLogicalRange(target);
+    }
     this.svg.innerHTML = this.chartSvg();
     let candle = this.candles.at(-1);
     if (this.hover && this.inPlot(this.hover)) candle = this.candles[clamp(Math.round(this.indexAt(this.hover.x)), 0, this.candles.length - 1)] || candle;
@@ -627,7 +616,8 @@ export class TradingChart {
   }
 
   snapshot() {
-    return `<svg xmlns="${SVG_NS}" width="${this.width}" height="${this.height}" viewBox="0 0 ${this.width} ${this.height}" role="img"><title>${escapeXml(this.symbol)} trade chart</title><desc>A recorded trade chart with candles, entry, stop loss, take profit, and the trader's drawings. Times are UTC.</desc>${this.chartSvg(true)}</svg>`;
+    this.render();
+    return `<svg xmlns="${SVG_NS}" width="${this.width}" height="${this.height}" viewBox="0 0 ${this.width} ${this.height}" role="img"><title>${escapeXml(this.symbol)} trade chart</title><desc>A recorded trade chart with candles, entry, stop loss, take profit, and the trader's drawings. Times are UTC.</desc><image width="${this.width}" height="${this.height}" href="${this.engine.takeScreenshot().toDataURL('image/png')}"/>${this.chartSvg(true)}<text x="15" y="24" fill="${document.documentElement.dataset.theme === 'light' ? '#17283d' : '#e1ebfa'}" font-family="system-ui" font-size="11">${escapeXml(this.symbol)} · Trade journal</text></svg>`;
   }
 
   destroy() {
@@ -637,6 +627,8 @@ export class TradingChart {
     this.handlers.forEach(remove => remove());
     this.handlers = [];
     this.pointers.clear();
+    this.engine.remove();
+    this.attribution.remove();
     this.wrapper.remove();
   }
 }
