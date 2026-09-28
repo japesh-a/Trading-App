@@ -18,6 +18,18 @@ For the AI trade review, set **both** `OPENAI_API_KEY` and `OPENAI_MODEL` on the
 
 When market data is unavailable, the browser can show an explicitly labeled synthetic training feed. Those trades are local practice records and never enter verified rankings. Paper trading is available immediately; lessons remain available at any pace. Market orders enter at the current quote. Chosen-price entries wait until a candle or sampled quote crosses that level, and exits start on the next candle because the order of prices within a candle is unknown. An unfilled daily entry records $0 P/L; a pending paper entry can be cancelled. The daily replay always reveals and executes 15-minute bars; higher timeframe charts aggregate only candles already revealed. The 1m and 5m daily views are omitted because the exercise does not have minute-level execution data. Paper timeframe changes affect the chart view, not the quote-based execution model. Connected paper positions use server-managed fills; the simulation excludes spread, fees, financing, leverage, and margin. Within a replay candle, a stop is counted first if both stop and target are touched. Paper reconciliation is approximate across connection gaps.
 
+## Appearance and accounts
+
+The header's **Light mode / Dark mode** button changes the whole workspace, including live charts. The first visit follows the device preference; choosing a theme saves it in the browser. Theme controls work on GitHub Pages without a server.
+
+**Sign in** opens email/password login or account creation. Passwords must be 12–128 characters and are stored using salted scrypt hashes. Account sessions use hashed random tokens in SQLite and HttpOnly cookies, expire after seven days, and are revoked on sign-out. Login and registration attempts are rate limited. Email addresses are private; display names appear in verified leaderboards.
+
+Accounts save learning progress, paper positions, and verified trade history on the server. Verified journal entries are restored when signing in on another device. Browser journals and drawings are scoped to the signed-in account; guest records stay separate and are not automatically imported. Offline practice, chart snapshots, and journal review notes remain browser-local. This initial account implementation does not include email verification, password recovery, or Google sign-in; save your password securely.
+
+To enable accounts on the public website, deploy the existing Node.js service with persistent SQLite storage, then set `apiBase` in `public/runtime-config.json` to its HTTPS origin. GitHub Pages alone cannot run the account service. Without a connected service, the sign-in dialog explains guest mode instead of accepting credentials.
+
+For a hosted HTTPS service, set `NODE_ENV=production` (enables Secure cookies), `WICKLUME_HOST=0.0.0.0`, and `WICKLUME_ALLOWED_ORIGIN` to the exact frontend origin. If the frontend and API are on different sites, also set `WICKLUME_COOKIE_SECURE=true` and `WICKLUME_COOKIE_SAME_SITE=none`. Some browsers block third-party cookies; hosting the frontend and API on the same site is recommended. Local HTTP development uses SameSite=Lax cookies. Never publish the database or log passwords/cookies. Google login can be added once a Google OAuth client is configured.
+
 ## Build and test
 
 ```powershell

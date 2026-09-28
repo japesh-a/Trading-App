@@ -17,6 +17,22 @@
   --shadow: 0 12px 38px #0307112b;
   --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
 }
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f4f7fb;
+  --panel: #ffffff;
+  --panel-raised: #eaf0f7;
+  --line: #cdd7e4;
+  --text: #17283d;
+  --muted: #52657c;
+  --subtle: #607189;
+  --lime: #087b65;
+  --cyan: #176ca6;
+  --green: #087b65;
+  --red: #b6324d;
+  --amber: #91601b;
+  --shadow: 0 12px 38px #233b5712;
+}
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-top: 24px; }
 body { margin: 0; min-width: 320px; background: var(--bg); color: var(--text); font: 14px/1.5 Inter, 'Segoe UI', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
@@ -539,4 +555,124 @@ label, .form-field { display: block; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+/* Account controls share the current theme and remain reachable on small screens. */
+.btn.compact { min-height: 34px; padding: 7px 10px; white-space: nowrap; }
+.local-profile b { overflow-wrap: anywhere; }
+#account-dialog { width: min(460px, calc(100vw - 28px)); max-height: calc(100dvh - 40px); padding: 25px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
+#account-dialog::backdrop { background: #03071199; backdrop-filter: blur(4px); }
+.account-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.account-dialog-head h2 { margin: 0; font-size: 19px; }
+#account-form { display: grid; gap: 14px; }
+#account-form label { display: grid; gap: 6px; color: var(--text); font-size: 12px; }
+#account-form p { margin: 0; font-size: 12px; }
+.account-switch { display: block; margin: 20px 0 14px; }
+
+:root[data-theme='light'] .sidebar,
+:root[data-theme='light'] .topbar { background: #fff; }
+:root[data-theme='light'] .sidebar-note,
+:root[data-theme='light'] .hero,
+:root[data-theme='light'] .challenge-card,
+:root[data-theme='light'] .completion-card,
+:root[data-theme='light'] .trade-results,
+:root[data-theme='light'] .empty-state,
+:root[data-theme='light'] .unlock-card { background: linear-gradient(125deg, #e3f3ee, #edf3fc); border-color: #bad5d0; }
+:root[data-theme='light'] .hero p,
+:root[data-theme='light'] .tag { color: #365e60; }
+:root[data-theme='light'] .btn,
+:root[data-theme='light'] .pill,
+:root[data-theme='light'] .status-pill,
+:root[data-theme='light'] .node,
+:root[data-theme='light'] .day b,
+:root[data-theme='light'] .course-heading,
+:root[data-theme='light'] .visual-title,
+:root[data-theme='light'] .worked-example,
+:root[data-theme='light'] .terminal-head,
+:root[data-theme='light'] .chart-meta,
+:root[data-theme='light'] .chart-toolbar,
+:root[data-theme='light'] .timeframe-bar,
+:root[data-theme='light'] .metric-strip,
+:root[data-theme='light'] .replay-controls,
+:root[data-theme='light'] .account-bar,
+:root[data-theme='light'] .market-tabs button,
+:root[data-theme='light'] .scenario-tabs button,
+:root[data-theme='light'] .view-tabs button,
+:root[data-theme='light'] .decisions button,
+:root[data-theme='light'] .data-table th,
+:root[data-theme='light'] .leaderboard-table th,
+:root[data-theme='light'] .notice,
+:root[data-theme='light'] .data-notice,
+:root[data-theme='light'] .coach-message { color: var(--text); background: var(--panel-raised); border-color: var(--line); }
+:root[data-theme='light'] .btn:hover:not(:disabled),
+:root[data-theme='light'] .option:hover:not(:disabled),
+:root[data-theme='light'] .lesson-row:not(:disabled):hover,
+:root[data-theme='light'] .data-table tbody tr:hover,
+:root[data-theme='light'] .leaderboard-table tbody tr:hover { background: #dfe8f3; }
+:root[data-theme='light'] .btn.primary,
+:root[data-theme='light'] .day.done b { background: var(--green); color: #fff; border-color: var(--green); }
+:root[data-theme='light'] .btn.primary:hover:not(:disabled) { background: #056653; border-color: #056653; }
+:root[data-theme='light'] .btn.danger,
+:root[data-theme='light'] .error-message { color: var(--red); }
+:root[data-theme='light'] .status-pill.warning,
+:root[data-theme='light'] .status-pill.demo,
+:root[data-theme='light'] .connection-note,
+:root[data-theme='light'] .notice.warning,
+:root[data-theme='light'] .streak { color: #80551c; background: #fff5df; border-color: #e6d3a9; }
+:root[data-theme='light'] input:not([type='radio']):not([type='checkbox']):not([type='range']),
+:root[data-theme='light'] select,
+:root[data-theme='light'] textarea,
+:root[data-theme='light'] .option,
+:root[data-theme='light'] .lesson-visual,
+:root[data-theme='light'] .lesson-visual svg,
+:root[data-theme='light'] .chart-area,
+:root[data-theme='light'] .equity-chart,
+:root[data-theme='light'] .journal-snapshot,
+:root[data-theme='light'] .side-toggle { color: var(--text); background: #fff; border-color: var(--line); }
+:root[data-theme='light'] .lesson-row h3,
+:root[data-theme='light'] .lesson-body,
+:root[data-theme='light'] .worked-example p,
+:root[data-theme='light'] .journal-card > h4,
+:root[data-theme='light'] .journal-trade-details b,
+:root[data-theme='light'] .data-table td,
+:root[data-theme='light'] .leaderboard-table td { color: var(--text); border-color: var(--line); }
+:root[data-theme='light'] .lesson-row { border-color: var(--line); }
+:root[data-theme='light'] .visual-title span,
+:root[data-theme='light'] .lesson-visual figcaption,
+:root[data-theme='light'] .journal-card > .journal-reasoning { color: var(--muted); border-color: var(--line); }
+:root[data-theme='light'] .progress-track,
+:root[data-theme='light'] .replay-progress { background: #d3deeb; }
+:root[data-theme='light'] .avatar,
+:root[data-theme='light'] .rank-avatar { color: #165849; background: #d9eee7; border-color: #b2d4c9; }
+:root[data-theme='light'] .feedback { background: #e2f3ea; border-color: #abcdbd; }
+:root[data-theme='light'] .link:hover { color: #056653; }
+:root[data-theme='light'] .wl-chart { background: #fff; border-color: var(--line); color: var(--muted); }
+:root[data-theme='light'] .wl-chart__symbol,
+:root[data-theme='light'] .wl-chart__ohlc b { color: var(--text); }
+:root[data-theme='light'] .wl-chart__ohlc,
+:root[data-theme='light'] .wl-chart__hint { color: var(--muted); }
+:root[data-theme='light'] .wl-chart__reset { background: var(--panel-raised); color: var(--text); border-color: var(--line); }
+:root[data-theme='light'] .wl-chart__reset:hover { background: #dfe8f3; }
+/* Diagram colours remain semantic while labels gain contrast on white. */
+:root[data-theme='light'] .lesson-visual svg text { fill: var(--muted); }
+:root[data-theme='light'] .lesson-visual [fill='#152235'] { fill: #eaf0f7; }
+:root[data-theme='light'] .lesson-visual [fill='#101b2c'] { fill: #f4f7fb; }
+:root[data-theme='light'] .lesson-visual [fill='#183437'],
+:root[data-theme='light'] .lesson-visual [fill='#183c38'] { fill: #daf0e7; }
+:root[data-theme='light'] .lesson-visual [fill='#2c2630'],
+:root[data-theme='light'] .lesson-visual [fill='#3d2533'] { fill: #f9e4e9; }
+:root[data-theme='light'] .lesson-visual [fill='#65b9f5'] { fill: var(--cyan); }
+:root[data-theme='light'] .lesson-visual [stroke='#65b9f5'] { stroke: var(--cyan); }
+:root[data-theme='light'] .equity-chart text { fill: var(--muted); }
+:root[data-theme='light'] svg [fill='#4fd1b5'] { fill: var(--green); }
+:root[data-theme='light'] svg [stroke='#4fd1b5'] { stroke: var(--green); }
+:root[data-theme='light'] svg [fill='#f17b8d'] { fill: var(--red); }
+:root[data-theme='light'] svg [stroke='#f17b8d'] { stroke: var(--red); }
+:root[data-theme='light'] svg [stroke='#27364b'],
+:root[data-theme='light'] svg [stroke='#304257'] { stroke: var(--line); }
+@media (max-width: 560px) {
+  .topbar { height: auto; min-height: 64px; flex-wrap: wrap; padding-block: 10px; gap: 6px 12px; }
+  .top-actions { gap: 6px; flex-wrap: wrap; }
+  .top-actions .streak, .top-actions > .status-pill { display: none; }
+  #account-dialog { padding: 20px; }
 }

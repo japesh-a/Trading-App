@@ -18,7 +18,7 @@ export async function requestService(path,body){
     const value=await r.json();if(!r.ok)throw Error(value.error||'Unable to connect');
     token=value.token;localStorage.setItem('wicklume-service-token',token);
   }
-  const r=await fetch(config.apiBase+'/api/trading'+path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(path==='/coach'?35000:15000)});
+  const r=await fetch(config.apiBase+'/api/trading'+path,{method:body?'POST':'GET',credentials:'include',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(path==='/coach'?35000:15000)});
   const value=await r.json();if(!r.ok)throw Error(value.error||'Online service unavailable');return value;
 }
 export function utcDay(now=Date.now()){return new Date(now).toISOString().slice(0,10);}

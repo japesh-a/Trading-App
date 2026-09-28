@@ -1,11 +1,17 @@
 import { INITIAL_BALANCE, summarizeTrades } from './trade-engine.js';
 
 // This is a local device journal, not a shared account or verified leaderboard.
-const PREFIX = 'wicklume.trading.v1.';
+let PREFIX = 'wicklume.trading.v1.';
 const memory = new Map();
 const unsaved = new Set();
 let warningHandler = null;
 let lastWarning = null;
+export function setAccountScope(accountId) {
+  PREFIX = accountId ? `wicklume.trading.v1.account.${accountId}.` : 'wicklume.trading.v1.';
+  memory.clear();
+  unsaved.clear();
+  lastWarning = null;
+}
 const clone = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 
 function warn(operation, error) {

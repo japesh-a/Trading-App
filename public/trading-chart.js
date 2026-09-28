@@ -136,6 +136,7 @@ export class TradingChart {
     this.listen(this.svg, 'keydown', event => this.keyDown(event));
     this.listen(this.svg, 'dblclick', event => { if (this.tool === 'cursor' && !event.target.closest('[data-level],[data-drawing]')) this.resetView(); });
     this.listen(this.wrapper.querySelector('button'), 'click', () => this.resetView());
+    this.listen(window, 'wicklume:theme', () => this.schedule());
     if (typeof ResizeObserver !== 'undefined') {
       this.observer = new ResizeObserver(entries => this.resize(entries[0]?.contentRect));
       this.observer.observe(this.container);
@@ -600,7 +601,18 @@ export class TradingChart {
     }
     parts.push('</g>');
     this.renderRange = null;
-    return parts.join('');
+    const svg = parts.join('');
+    if (document.documentElement.dataset.theme !== 'light') return svg;
+    const palette = {
+      '#0a1220': '#ffffff', '#233047': '#ccd7e5', '#1a293e': '#d4deea',
+      '#17253a': '#e4eaf2', '#152237': '#e4eaf2', '#14253e': '#edf3fa',
+      '#142139': '#edf3fa', '#20395b': '#dce8f6', '#a2b2c8': '#52657c',
+      '#b0c1d8': '#354d68', '#d8e8ff': '#263f5c', '#e1ebfa': '#17283d',
+      '#7388a4': '#52657c', '#758ba7': '#52657c', '#647b98': '#52657c',
+      '#617793': '#52657c', '#7e94b0': '#52657c', '#415875': '#607189',
+      '#32d5af': '#087b65', '#f4778c': '#b6324d', '#91bdff': '#2167b5',
+    };
+    return svg.replace(/#[0-9a-f]{6}\b/g, color => palette[color] || color);
   }
 
   render() {

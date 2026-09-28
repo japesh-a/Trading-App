@@ -153,6 +153,21 @@ test('journal deduplicates, preserves notes, isolates daily P/L, and survives st
   store.saveSession('daily-2026-09-25', { cursor: 14 });
   store.clearSession('daily-2026-09-25');
   assert.equal(store.getSession('daily-2026-09-25'), null);
+  store.setAccountScope('alice');
+  assert.equal(store.getTrades().length, 0, 'Guest trades are not imported into an account');
+  assert.equal(store.loadAccount().displayName, 'You');
+  store.recordTrade(paper);
+  store.updateTradeNotes(paper.id, 'Alice private review');
+  store.saveSession('paper-BTC', { owner: 'alice' });
+  store.setAccountScope('bob');
+  assert.equal(store.getTrades().length, 0, 'Other accounts cannot see the browser journal');
+  assert.equal(store.getSession('paper-BTC'), null, 'Drawing and practice sessions are isolated');
+  store.setAccountScope('alice');
+  assert.equal(store.getTrades()[0].notes, 'Alice private review');
+  assert.equal(store.getSession('paper-BTC').owner, 'alice');
+  store.setAccountScope(null);
+  assert.equal(store.getTrades().length, 2, 'Signing out restores the guest journal');
+  assert.equal(store.loadAccount().displayName, 'Alex');
   delete globalThis.localStorage;
 });
 

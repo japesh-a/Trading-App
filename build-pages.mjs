@@ -18,6 +18,7 @@ for(const file of files){
 const source=readFileSync(path.join(root,'public','index.html'),'utf8');
 const html=source
  .replace('href="/style.css"', 'href="./style.css?v='+version+'"')
+ .replace('src="/theme.js"', 'src="./theme.js?v='+version+'"')
  .replace('<script type="module" src="/app.js"></script>',
   '<script>window.__WICKLUME_STATIC__=true</script><script src="./pages-adapter.js?v='+version+'"></script><script type="module" src="./app.js?v='+version+'"></script>');
 if(!html.includes('__WICKLUME_STATIC__'))throw Error('Static HTML transformation failed');

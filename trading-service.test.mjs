@@ -45,6 +45,70 @@ async function fixture(overrides = {}) {
 const order = { side: 'buy', entry: 102, stopLoss: 97, takeProfit: 110, quantity: 10 };
 const decision = { challengeId: '2026-09-25-BTC-15m', order, reasoning: 'I will invalidate below the range low and size the risk first.', displayName: 'Alex' };
 
+test('email accounts persist progress across logins and isolate guests and other accounts', async () => {
+  const f = await fixture();
+  const credentials = { email: 'Alice@Example.com', password: 'a-long-test-password', displayName: 'Alice' };
+  const cookie = response => response.headers.get('set-cookie').split(';')[0];
+  try {
+    const guest = (await f.call('/session', {})).data.token;
+    assert.equal((await f.call('/auth/me')).data.account, null);
+    assert.equal((await f.call('/auth/register', { ...credentials, password: 'short' })).status, 400);
+    const registered = await f.call('/auth/register', credentials);
+    assert.equal(registered.status, 201);
+    assert.equal(registered.data.account.email, 'alice@example.com');
+    assert.match(registered.headers.get('set-cookie'), /HttpOnly; SameSite=Lax/);
+    assert.equal(registered.data.token, undefined, 'Account credentials are never returned to browser JavaScript');
+    const alice = { Cookie: cookie(registered) };
+    const stored = f.db.prepare('SELECT * FROM accounts').get();
+    assert.notEqual(stored.password_hash, credentials.password);
+    assert.equal(stored.password_hash.length, 128);
+    assert.equal(stored.salt.length, 32);
+    assert.equal((await f.call('/auth/me', undefined, undefined, alice)).data.account.id, registered.data.account.id);
+    const answer = await f.call('/answer', { id: 0, question: 0, answer: 0 }, guest, alice);
+    assert.equal(answer.status, 200);
+    assert.equal(answer.data.progress.attempts, 1);
+    assert.equal((await f.call('/progress', undefined, guest)).data.attempts, 0, 'Cookie identity does not mutate the guest bearer session');
+    assert.equal((await f.call('/auth/register', credentials)).status, 409);
+    assert.equal((await f.call('/auth/login', { ...credentials, password: 'wrong-long-password' })).status, 401);
+    assert.equal((await f.call('/auth/login', { ...credentials, email: 'missing@example.com' })).status, 401);
+    const login = await f.call('/auth/login', credentials);
+    assert.equal(login.status, 200);
+    const secondDevice = { Cookie: cookie(login) };
+    assert.equal((await f.call('/progress', undefined, undefined, secondDevice)).data.attempts, 1);
+    const bobResponse = await f.call('/auth/register', { ...credentials, email: 'bob@example.com', displayName: 'Bob' });
+    assert.equal(bobResponse.status, 201);
+    const bob = { Cookie: cookie(bobResponse) };
+    assert.equal((await f.call('/progress', undefined, undefined, bob)).data.attempts, 0);
+    const accountSession = f.db.prepare('SELECT session_id FROM accounts WHERE id=?').get(registered.data.account.id).session_id;
+    const savedTrade = { id: 'alice-trade', mode: 'paper', status: 'closed', pnl: 10 };
+    f.db.prepare('INSERT INTO trading_paper_trades VALUES(?,?,?)').run(savedTrade.id, accountSession, JSON.stringify(savedTrade));
+    assert.deepEqual((await f.call('/journal', undefined, undefined, secondDevice)).data.trades, [savedTrade]);
+    assert.deepEqual((await f.call('/journal', undefined, undefined, bob)).data.trades, []);
+    const logout = await f.call('/auth/logout', {}, undefined, secondDevice);
+    assert.equal(logout.status, 200);
+    assert.match(logout.headers.get('set-cookie'), /Max-Age=0/);
+    assert.equal((await f.call('/progress', undefined, undefined, secondDevice)).status, 401, 'Logout revokes the server session');
+    assert.equal((await f.call('/progress', undefined, undefined, alice)).status, 200, 'Other devices stay signed in');
+    f.tick(8 * 86400000);
+    assert.equal((await f.call('/progress', undefined, undefined, alice)).status, 401, 'Sessions expire on the server');
+    assert.equal((await f.call('/auth/logout', {}, undefined, alice)).status, 200, 'An expired login can be cleared');
+  } finally { await f.close(); }
+});
+
+test('account routes reject hostile origins, use production Secure cookies and throttle login attempts', async () => {
+  const f = await fixture({ env: { NODE_ENV: 'production', WICKLUME_COOKIE_SAME_SITE: 'none' } });
+  const credentials = { email: 'secure@example.com', password: 'another-long-password', displayName: 'Secure user' };
+  try {
+    assert.equal((await f.call('/auth/register', credentials, undefined, { Origin: 'https://attacker.invalid' })).status, 403);
+    const registered = await f.call('/auth/register', credentials, undefined, { Origin: 'https://japesh-a.github.io' });
+    assert.equal(registered.status, 201);
+    assert.match(registered.headers.get('set-cookie'), /SameSite=None; Max-Age=604800; Secure/);
+    assert.equal(registered.headers.get('access-control-allow-credentials'), 'true');
+    for (let i = 0; i < 11; i++) assert.equal((await f.call('/auth/login', { ...credentials, password: 'an-incorrect-password' })).status, 401);
+    assert.equal((await f.call('/auth/login', credentials)).status, 429);
+  } finally { await f.close(); }
+});
+
 test('sessions are authenticated, token hashes persist, and CORS/body limits apply', async () => {
   const f = await fixture();
   try {

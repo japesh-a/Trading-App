@@ -2,6 +2,7 @@ import { lessonVisual } from './lesson-visuals.js';
 import {renderTrading,renderJournal,renderLeaderboard} from './trading-workspace.js';
 import {requestService,serviceConfig} from './market-data.js';
 import {getTrades} from './trade-store.js';
+import {initializeAccounts} from './accounts.js';
 let disposePage=()=>{};
 
 const $=selector=>document.querySelector(selector);
@@ -48,4 +49,4 @@ if(!window.__WICKLUME_STATIC__){
  liveEvents.onopen=()=>{if(previewConnected)location.reload();previewConnected=true};
  liveEvents.onmessage=()=>location.reload();
 }
-try{[state,lessons]=await Promise.all([api('/api/progress'),api('/api/lessons')]);navigate(location.hash.slice(1)||'home')}catch(error){app.innerHTML='<h1>Unable to load your workspace.</h1><p>Check that the local server is running, then refresh the page.</p>'}
+try{await initializeAccounts();[state,lessons]=await Promise.all([api('/api/progress'),api('/api/lessons')]);navigate(location.hash.slice(1)||'home')}catch(error){app.innerHTML='<h1>Unable to load your workspace.</h1><p>Refresh to retry, or use Sign in to reconnect or continue as a guest.</p>'}

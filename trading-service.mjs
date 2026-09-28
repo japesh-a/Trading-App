@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createAccountService } from './auth-service.mjs';
 import { lessons, publicLessons, correctIndex } from './curriculum.mjs';
 import { previousDayChallenge, coinbaseCandles, coinbaseChartCandles, utcDay } from './public/market-data.js';
 import { TIMEFRAMES } from './public/timeframes.js';
@@ -75,7 +76,10 @@ export function createTradingService(db, options = {}) {
     CREATE TABLE IF NOT EXISTS trading_paper_trades (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, value TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS trading_paper_by_session ON trading_paper_trades(session_id);
   `);
+  const accounts = createAccountService(db, { env, clock, fail, requestBody, rateLimit });
   const sessionFor = req => {
+    const account = accounts.resolve(req);
+    if (account) return account;
     const match = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(String(req.headers.authorization || ''));
     if (!match) fail(401, 'Connect your learning session before continuing.');
     const session = db.prepare('SELECT id, display_name FROM trading_sessions WHERE token_hash=?').get(hash(match[1]));
@@ -276,16 +280,18 @@ export function createTradingService(db, options = {}) {
       const localOrigin = `${req.socket.encrypted ? 'https' : 'http'}://${req.headers.host}`;
       if (origin && origin !== localOrigin && !allowedOrigins.has(origin)) fail(403, 'This website origin is not allowed.');
       if (origin) { res.setHeader('Access-Control-Allow-Origin', origin); res.setHeader('Vary', 'Origin'); }
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
       res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
       if (req.method === 'OPTIONS') return send(null, 204);
       const route = url.pathname.slice('/api/trading'.length), ip = req.socket.remoteAddress || 'unknown';
       rateLimit(`ip:${ip}`, 240);
+      if (await accounts.handle(req, res, route, send, ip)) return true;
       if (route === '/config' && req.method === 'GET') return send({
         dailyRanked: true, paperRanked: true, lessonGateVerified: false, paperTradingOpen: true,
         coach: Boolean(env.OPENAI_API_KEY && env.OPENAI_MODEL),
         markets: { BTC: true, US500: Boolean(env.TWELVE_DATA_API_KEY), XAUUSD: Boolean(env.TWELVE_DATA_API_KEY), GBPUSD: Boolean(env.TWELVE_DATA_API_KEY) },
-        accountType: 'anonymous-device-session', initialBalance: INITIAL_BALANCE,
+        accountType: 'email-and-guest', accounts: true, initialBalance: INITIAL_BALANCE,
         dailyRiskLimit: 100, execution: 'Educational simulation; no spread, fees, financing or margin. Stops may slip; candles use stop-first execution.',
         paperExecution: 'Quote polling with completed-candle reconciliation. Partial entry minutes and provider-history gaps cannot be reconstructed exactly.',
       });
@@ -299,6 +305,10 @@ export function createTradingService(db, options = {}) {
       rateLimit(`session:${session.id}`, 180);
       if (route === '/lessons' && req.method === 'GET') return send(publicLessons());
       if (route === '/progress' && req.method === 'GET') return send(getProgress(session.id));
+      if (route === '/journal' && req.method === 'GET') return send({ trades: [
+        ...paperTrades(session.id),
+        ...db.prepare('SELECT value FROM trading_daily_results WHERE session_id=?').all(session.id).map(row => jsonParse(row.value)),
+      ] });
       if (route === '/answer' && req.method === 'POST') {
         const body = await requestBody(req), id = body.id, question = body.question, answer = body.answer;
         if (!Number.isInteger(id) || id < 0 || id >= lessons.length) fail(400, 'Invalid lesson.');
