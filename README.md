@@ -8,9 +8,10 @@ Choose **Use training mode** while a feed loads, or **Training mode** from an av
 
 ## Run locally
 
-Use Node.js 24 or newer; no package installation is needed.
+Use Node.js 24 or newer and install the server dependencies first.
 
 ```powershell
+npm.cmd install
 npm.cmd run dev
 ```
 
@@ -40,15 +41,17 @@ The standalone ESM distribution is checked in as `public/lightweight-charts.js`;
 
 The header's **Light mode / Dark mode** button changes the whole workspace, including live charts. The first visit follows the device preference; choosing a theme saves it in the browser. Theme controls work on GitHub Pages without a server.
 
-**Sign in** opens email/password login or account creation. Passwords must be 12–128 characters and are stored using salted scrypt hashes. Account sessions use hashed random tokens in SQLite and HttpOnly cookies, expire after seven days, and are revoked on sign-out. Login and registration attempts are rate limited. Email addresses are private; display names appear in verified leaderboards. The account dialog lets you update your display name or change your password after entering the current one. Changing a password revokes other device logins while retaining account progress and trades. Account names remain authoritative when placing trades, and leaderboard name changes save to the server when connected.
+**Sign in** opens email/password login or account creation, plus a Google button when `GOOGLE_CLIENT_ID` is configured on the server. Passwords must be 12–128 characters and are stored using salted scrypt hashes. Google ID tokens are checked server-side with Google's official library; the stable Google account ID identifies a returning user. Existing password accounts must sign in with their password before linking Google in Account settings. A matching email alone never links accounts. Account sessions use hashed random tokens in SQLite and HttpOnly cookies, expire after seven days, and are revoked on sign-out. Login and registration attempts are rate limited. Email addresses are private; display names appear in verified leaderboards. The account dialog lets password users change their password after entering the current one. Changing a password revokes other device logins while retaining account progress and trades. Account names remain authoritative when placing trades, and leaderboard name changes save to the server when connected.
 
-Accounts save learning progress, paper positions, and verified trade history on the server. Verified journal entries are restored when signing in on another device. Browser journals and drawings are scoped to the signed-in account; guest records stay separate and are not automatically imported. Offline practice, chart snapshots, and journal review notes remain browser-local. This initial account implementation does not include email verification, password recovery, or Google sign-in; save your password securely.
+Accounts save learning progress, paper positions, and verified trade history on the server. Verified journal entries are restored when signing in on another device. Browser journals and drawings are scoped to the signed-in account; guest records stay separate and are not automatically imported. Offline practice, chart snapshots, and journal review notes remain browser-local. Password accounts do not yet have email verification or password recovery; save your password securely.
 
 When browser storage is blocked or full, guest service requests share one in-memory session and Pages learning progress stays in the open tab. A storage notice explains that closing the tab loses unsaved work. Malformed saved learning data is handled without crashing the workspace. Account login continues to use cookies rather than browser-stored tokens.
 
-To enable accounts on the public website, deploy the existing Node.js service with persistent SQLite storage, then set `apiBase` in `public/runtime-config.json` to its HTTPS origin. GitHub Pages alone cannot run the account service. Without a connected service, the sign-in dialog explains guest mode instead of accepting credentials.
+To enable online accounts, deploy the Node.js service with persistent SQLite storage and set `GOOGLE_CLIENT_ID` to a Google Cloud **Web application** OAuth client ID. Configure the app's OAuth branding and add the exact website origin under **Authorized JavaScript origins**. The Google button uses Google Identity Services' JavaScript callback, so it does not need a client secret or redirect URI. If the OAuth app is in testing mode, Google limits sign-in to its test users. Never commit a client secret, database, or login cookie. Google's setup guide is at https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid .
 
-For a hosted HTTPS service, set `NODE_ENV=production` (enables Secure cookies), `WICKLUME_HOST=0.0.0.0`, and `WICKLUME_ALLOWED_ORIGIN` to the exact frontend origin. If the frontend and API are on different sites, also set `WICKLUME_COOKIE_SECURE=true` and `WICKLUME_COOKIE_SAME_SITE=none`. Some browsers block third-party cookies; hosting the frontend and API on the same site is recommended. Local HTTP development uses SameSite=Lax cookies. Never publish the database or log passwords/cookies. Google login can be added once a Google OAuth client is configured.
+For reliable account cookies, use the server's own HTTPS URL as the online site: the server serves both the frontend and `/api/trading` on one origin. Set `NODE_ENV=production`, `WICKLUME_HOST=0.0.0.0`, `GOOGLE_CLIENT_ID`, and `WICKLUME_DATA_DIR` to a persistent mounted directory. `PORT` is supplied by most hosts. The service must use Node.js 24 or newer for the bundled SQLite API. The existing GitHub Pages URL remains a guest-only demo until `apiBase` in `public/runtime-config.json` points to the deployed service. Cross-site API cookies on GitHub Pages can be blocked by browsers, so the same-origin server URL is the recommended account URL.
+
+For a hosted HTTPS service, `NODE_ENV=production` enables Secure cookies. If the frontend and API are on different sites, also set `WICKLUME_ALLOWED_ORIGIN` to the exact frontend origin, `WICKLUME_COOKIE_SECURE=true`, and `WICKLUME_COOKIE_SAME_SITE=none`. Some browsers block third-party cookies; hosting the frontend and API on the same site is recommended. Local HTTP development uses SameSite=Lax cookies. Never publish the database or log passwords/cookies.
 
 ## Build and test
 

@@ -39,7 +39,7 @@ async function fixture(overrides = {}) {
     });
     return { status: response.status, data: await response.json(), headers: response.headers };
   };
-  return { call, db, challenge, now: () => now, tick: (ms = 61000) => { now += ms; }, setPrice: value => { price = value; }, coachPayload: () => coachPayload,
+  return { call, base, db, challenge, now: () => now, tick: (ms = 61000) => { now += ms; }, setPrice: value => { price = value; }, coachPayload: () => coachPayload,
     close: async () => { await new Promise(resolve => server.close(resolve)); db.close(); } };
 }
 const order = { side: 'buy', entry: 102, stopLoss: 97, takeProfit: 110, quantity: 10 };
@@ -95,6 +95,53 @@ test('email accounts persist progress across logins and isolate guests and other
   } finally { await f.close(); }
 });
 
+test('Google sign in creates a separate account, restores it by Google ID, and never grants password access', async () => {
+  const f = await fixture({ env: { GOOGLE_CLIENT_ID: 'test-client.apps.googleusercontent.com' },
+    googleVerifier: async credential => {
+      if (credential === 'invalid') throw Error('Bad signature');
+      if (credential === 'unverified') return { sub: 'google-2', email: 'new@example.com', email_verified: false };
+      return { sub: 'google-1', email: credential === 'renamed' ? 'changed@example.com' : 'new@example.com', email_verified: true, name: 'New learner' };
+    } });
+  const origin = { Origin: 'https://japesh-a.github.io' };
+  const cookie = response => ({ ...origin, Cookie: response.headers.get('set-cookie').split(';')[0] });
+  try {
+    assert.equal((await f.call('/config')).data.googleClientId, 'test-client.apps.googleusercontent.com');
+    assert.equal((await f.call('/auth/google', { credential: 'valid' })).status, 403, 'An origin is required');
+    assert.equal((await f.call('/auth/google', { credential: 'valid' }, undefined, { Origin: 'https://attacker.invalid' })).status, 403);
+    assert.equal((await f.call('/auth/google', { credential: 'invalid' }, undefined, origin)).status, 401);
+    assert.equal((await f.call('/auth/google', { credential: 'unverified' }, undefined, origin)).status, 401);
+    const created = await f.call('/auth/google', { credential: 'valid' }, undefined, origin);
+    assert.equal(created.status, 200);
+    assert.equal(created.data.account.hasPassword, false);
+    assert.equal(created.data.account.googleLinked, true);
+    assert.equal((await f.call('/auth/me', undefined, undefined, cookie(created))).data.account.id, created.data.account.id);
+    assert.equal((await f.call('/auth/login', { email: 'new@example.com', password: 'any-long-password' })).status, 401);
+    assert.equal((await f.call('/auth/password', { currentPassword: 'any-long-password', newPassword: 'another-long-password' }, undefined, cookie(created))).status, 400);
+    const again = await f.call('/auth/google', { credential: 'renamed' }, undefined, origin);
+    assert.equal(again.data.account.id, created.data.account.id, 'Google sub, not email, identifies a returning account');
+  } finally { await f.close(); }
+});
+
+test('Google identity links only after password sign in and never merges accounts by email', async () => {
+  const f = await fixture({ env: { GOOGLE_CLIENT_ID: 'test-client.apps.googleusercontent.com' },
+    googleVerifier: async credential => ({ sub: credential, email: 'existing@example.com', email_verified: true, name: 'Existing' }) });
+  const origin = { Origin: 'https://japesh-a.github.io' };
+  try {
+    const registered = await f.call('/auth/register', { email: 'existing@example.com', password: 'existing-long-password', displayName: 'Existing' });
+    const cookie = { ...origin, Cookie: registered.headers.get('set-cookie').split(';')[0] };
+    assert.equal((await f.call('/auth/google', { credential: 'google-1' }, undefined, origin)).status, 409);
+    assert.equal((await f.call('/auth/google', { credential: 'google-1', link: true }, undefined, origin)).status, 401);
+    const linked = await f.call('/auth/google', { credential: 'google-1', link: true }, undefined, cookie);
+    assert.equal(linked.status, 200);
+    assert.equal(linked.data.account.id, registered.data.account.id);
+    assert.equal(linked.data.account.googleLinked, true);
+    assert.equal((await f.call('/auth/google', { credential: 'google-2', link: true }, undefined, cookie)).status, 409);
+    const signedIn = await f.call('/auth/google', { credential: 'google-1' }, undefined, origin);
+    assert.equal(signedIn.data.account.id, registered.data.account.id);
+    assert.equal(signedIn.data.account.hasPassword, true);
+  } finally { await f.close(); }
+});
+
 test('account routes reject hostile origins, use production Secure cookies and throttle login attempts', async () => {
   const f = await fixture({ env: { NODE_ENV: 'production', WICKLUME_COOKIE_SAME_SITE: 'none' } });
   const credentials = { email: 'secure@example.com', password: 'another-long-password', displayName: 'Secure user' };
@@ -104,6 +151,8 @@ test('account routes reject hostile origins, use production Secure cookies and t
     assert.equal(registered.status, 201);
     assert.match(registered.headers.get('set-cookie'), /SameSite=None; Max-Age=604800; Secure/);
     assert.equal(registered.headers.get('access-control-allow-credentials'), 'true');
+    const hostedOrigin = 'https://' + new URL(f.base).host;
+    assert.equal((await f.call('/config', undefined, undefined, { Origin: hostedOrigin })).status, 200, 'The HTTPS site works behind a TLS-terminating proxy');
     for (let i = 0; i < 11; i++) assert.equal((await f.call('/auth/login', { ...credentials, password: 'an-incorrect-password' })).status, 401);
     assert.equal((await f.call('/auth/login', credentials)).status, 429);
   } finally { await f.close(); }

@@ -76,7 +76,7 @@ export function createTradingService(db, options = {}) {
     CREATE TABLE IF NOT EXISTS trading_paper_trades (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, value TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS trading_paper_by_session ON trading_paper_trades(session_id);
   `);
-  const accounts = createAccountService(db, { env, clock, fail, requestBody, rateLimit });
+  const accounts = createAccountService(db, { env, clock, fail, requestBody, rateLimit, googleVerifier: options.googleVerifier });
   const sessionFor = req => {
     const account = accounts.resolve(req);
     if (account) return account;
@@ -286,7 +286,8 @@ export function createTradingService(db, options = {}) {
     try {
       const origin = req.headers.origin;
       const localOrigin = `${req.socket.encrypted ? 'https' : 'http'}://${req.headers.host}`;
-      if (origin && origin !== localOrigin && !allowedOrigins.has(origin)) fail(403, 'This website origin is not allowed.');
+      const hostedOrigin = env.NODE_ENV === 'production' ? `https://${req.headers.host}` : localOrigin;
+      if (origin && origin !== localOrigin && origin !== hostedOrigin && !allowedOrigins.has(origin)) fail(403, 'This website origin is not allowed.');
       if (origin) { res.setHeader('Access-Control-Allow-Origin', origin); res.setHeader('Vary', 'Origin'); }
       res.setHeader('Access-Control-Allow-Credentials', 'true');
       res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
@@ -299,7 +300,7 @@ export function createTradingService(db, options = {}) {
         dailyRanked: true, paperRanked: true, lessonGateVerified: false, paperTradingOpen: true,
         coach: Boolean(env.OPENAI_API_KEY && env.OPENAI_MODEL),
         markets: { BTC: true, US500: Boolean(env.TWELVE_DATA_API_KEY), XAUUSD: Boolean(env.TWELVE_DATA_API_KEY), GBPUSD: Boolean(env.TWELVE_DATA_API_KEY) },
-        accountType: 'email-and-guest', accounts: true, initialBalance: INITIAL_BALANCE,
+        accountType: 'email-google-and-guest', accounts: true, googleClientId: env.GOOGLE_CLIENT_ID || '', initialBalance: INITIAL_BALANCE,
         dailyRiskLimit: 100, execution: 'Educational simulation; no spread, fees, financing or margin. Stops may slip; candles use stop-first execution.',
         paperExecution: 'Quote polling with completed-candle reconciliation. Partial entry minutes and provider-history gaps cannot be reconstructed exactly.',
       });

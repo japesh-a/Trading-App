@@ -2,6 +2,19 @@ import { serviceConfig, setServiceAccount, requestService } from './market-data.
 import { setAccountScope, recordTrade, saveAccount } from './trade-store.js';
 
 let currentAccount = null;
+let googleScriptRequest;
+function loadGoogleScript() {
+  if (window.google?.accounts?.id) return Promise.resolve();
+  if (!googleScriptRequest) googleScriptRequest = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.onload = resolve;
+    script.onerror = () => reject(Error('Google sign in could not load. Please try again later.'));
+    document.head.append(script);
+  }).catch(error => { googleScriptRequest = null; throw error; });
+  return googleScriptRequest;
+}
 export const getCurrentAccount = () => currentAccount;
 export async function saveDisplayName(value) {
   const displayName = String(value || '').trim();
@@ -19,7 +32,7 @@ export async function initializeAccounts() {
   const dialog = document.getElementById('account-dialog');
   const content = document.getElementById('account-content');
   const config = await serviceConfig();
-  let account = null, mode = 'login', available = Boolean(config.apiBase), statusMessage = '';
+  let account = null, mode = 'login', available = Boolean(config.apiBase), statusMessage = '', googleClientId = '';
   const call = async (path, body) => {
     const response = await fetch(config.apiBase + '/api/trading/auth/' + path, {
       method: body ? 'POST' : 'GET', credentials: 'include',
@@ -33,6 +46,10 @@ export async function initializeAccounts() {
   if (available) {
     try { account = (await call('me')).account; }
     catch (error) { statusMessage = error.message; }
+    try {
+      const response = await fetch(config.apiBase + '/api/trading/config', { credentials: 'include', signal: AbortSignal.timeout(15000) });
+      if (response.ok) googleClientId = String((await response.json()).googleClientId || '');
+    } catch { /* Email sign in remains available when config cannot be read. */ }
   }
   setAccountScope(account?.id);
   currentAccount = account;
@@ -58,6 +75,26 @@ export async function initializeAccounts() {
     location.reload();
   };
   window.addEventListener('storage', event => { if (event.key === 'wicklume-account-change') location.reload(); });
+  const showGoogle = async (link = false) => {
+    const slot = content.querySelector('#google-signin');
+    if (!slot || !googleClientId) return;
+    try {
+      await loadGoogleScript();
+      if (!slot.isConnected) return;
+      window.google.accounts.id.initialize({ client_id: googleClientId, callback: async response => {
+        const error = content.querySelector('#account-error');
+        if (error) error.textContent = '';
+        try {
+          const result = await call('google', { credential: response.credential, link });
+          if (link) { account = result.account; currentAccount = account; render(); return; }
+          const verified = (await call('me')).account;
+          if (!verified || verified.id !== result.account.id) throw Error('Your browser could not save the login cookie. Enable cookies for this service and try again.');
+          reload();
+        } catch (problem) { if (error) error.textContent = problem.message; }
+      }});
+      window.google.accounts.id.renderButton(slot, { theme: document.documentElement.dataset.theme === 'light' ? 'outline' : 'filled_black', size: 'large', text: link ? 'continue_with' : 'signin_with', width: Math.min(300, slot.clientWidth || 300) });
+    } catch (error) { if (slot.isConnected) slot.textContent = error.message; }
+  };
   const render = () => {
     content.replaceChildren();
     if (!available) {
@@ -67,11 +104,12 @@ export async function initializeAccounts() {
     if (account) {
       content.innerHTML = `<p id="account-email"></p><p>Your learning progress and verified trades are saved to your account. Drawings and offline practice stay in this browser.</p>
         <form id="profile-form"><label>Display name<input name="displayName" autocomplete="nickname" maxlength="40" required></label><button class="btn" type="submit">Save display name</button><p role="status" id="profile-status"></p></form>
-        <details class="password-settings"><summary>Change password</summary><form id="password-form">
+        ${account.hasPassword === false ? '' : `<details class="password-settings"><summary>Change password</summary><form id="password-form">
         <label>Current password<input name="currentPassword" type="password" autocomplete="current-password" maxlength="128" required></label>
         <label>New password<input name="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label>
         <label>Confirm new password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label>
-        <p class="muted">Use at least 12 characters. Changing your password signs out your other devices.</p><button class="btn" type="submit">Update password</button><p role="alert" class="error-message" id="password-error"></p></form></details>
+        <p class="muted">Use at least 12 characters. Changing your password signs out your other devices.</p><button class="btn" type="submit">Update password</button><p role="alert" class="error-message" id="password-error"></p></form></details>`}
+        ${googleClientId && !account.googleLinked ? '<div class="google-account"><p>Link Google to sign in without a password next time.</p><div id="google-signin"></div></div>' : account.googleLinked ? '<p>Google sign in is linked to this account.</p>' : ''}
         <button class="btn" id="sign-out">Sign out</button><p class="error-message" role="alert" id="account-error"></p>`;
       content.querySelector('#account-email').textContent = `Signed in as ${account.email}`;
       content.querySelector('[name="displayName"]').value = account.displayName;
@@ -82,7 +120,7 @@ export async function initializeAccounts() {
         catch (error) { content.querySelector('#profile-status').textContent = error.message; }
         finally { submit.disabled = false; }
       };
-      content.querySelector('#password-form').onsubmit = async event => {
+      if (account.hasPassword !== false) content.querySelector('#password-form').onsubmit = async event => {
         event.preventDefault();
         const values = Object.fromEntries(new FormData(event.currentTarget));
         const errorElement = content.querySelector('#password-error');
@@ -92,6 +130,7 @@ export async function initializeAccounts() {
         try { await call('password', { currentPassword: values.currentPassword, newPassword: values.newPassword }); reload(); }
         catch (error) { errorElement.textContent = error.message; submit.disabled = false; }
       };
+      showGoogle(true);
       content.querySelector('#sign-out').onclick = async event => {
         event.target.disabled = true;
         try { await call('logout', {}); reload(); }
@@ -101,6 +140,7 @@ export async function initializeAccounts() {
     }
     const register = mode === 'register';
     content.innerHTML = `<p>${register ? 'Create an account to keep your learning progress and verified trades across devices.' : 'Welcome back. Sign in to your learning and paper trading account.'}</p>
+      ${googleClientId ? '<div class="google-account"><div id="google-signin"></div><p>Or use your email and password below.</p></div>' : ''}
       <form id="account-form">
       ${register ? '<label>Display name<input name="displayName" autocomplete="nickname" maxlength="40" required></label>' : ''}
       <label>Email<input name="email" type="email" autocomplete="email" maxlength="254" required></label>
@@ -111,6 +151,7 @@ export async function initializeAccounts() {
       <button class="link account-switch" id="account-switch">${register ? 'Already have an account? Sign in' : 'New here? Create an account'}</button>
       <button class="link" id="guest-continue">Continue as a guest</button>`;
     content.querySelector('#account-error').textContent = statusMessage;
+    showGoogle();
     content.querySelector('#account-switch').onclick = () => { mode = register ? 'login' : 'register'; statusMessage = ''; render(); };
     content.querySelector('#guest-continue').onclick = async () => {
       try { await call('logout', {}); reload(); }
