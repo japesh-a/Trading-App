@@ -227,6 +227,58 @@ label, .form-field { display: block; }
 .completion-card h2 { margin: 12px 0; }
 .completion-card .btn { margin-top: 8px; }
 
+/* Quiet motion gives the workspace a clear sense of response. */
+@keyframes surface-in { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes answer-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes figure-in { from { opacity: .45; transform: scale(.985); } to { opacity: 1; transform: scale(1); } }
+#app > :first-child { animation: surface-in .38s ease-out both; }
+.panel, .stat, .lesson-row, .btn, .option { transition: transform .2s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease, color .2s ease; }
+.lesson-row:hover:not(:disabled), .stat:hover, .panel:hover { transform: translateY(-2px); }
+.lesson-row:hover:not(:disabled) { box-shadow: inset 3px 0 var(--green); }
+.btn:hover:not(:disabled) { transform: translateY(-2px); }
+.btn:active:not(:disabled), .option:active:not(:disabled) { transform: translateY(0) scale(.99); }
+.lesson-visual { box-shadow: 0 18px 42px #03071135; animation: figure-in .45s ease-out both; }
+.lesson-visual svg { background: #101927; }
+.lesson-visual figcaption { display: flex; align-items: flex-start; gap: 10px; background: #142033; }
+.caption-marker { color: var(--green); font-size: 18px; line-height: 1; }
+.visual-title .visual-heading { color: #dee9f5; font-size: 12px; font-weight: 650; letter-spacing: .1px; white-space: normal; }
+.quiz-panel { margin: 28px 0 38px; padding: clamp(20px, 4vw, 34px); border: 1px solid #33475d; border-radius: 16px; background: radial-gradient(circle at 100% 0, #204b5550, transparent 46%), linear-gradient(145deg, #152235, #101a2a); box-shadow: 0 20px 55px #03071142; }
+.quiz-head { padding: 0 0 13px; }
+.quiz-progress { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--green); font: 600 12px var(--mono); }
+.quiz-progress .eyebrow { color: var(--green); }
+.quiz-head h2 { max-width: 650px; margin-top: 22px; font-size: clamp(22px, 2.5vw, 29px); line-height: 1.35; }
+.quiz-head p { margin: 10px 0 8px; }
+.quiz-options { display: grid; gap: 11px; }
+.quiz-options .option { display: flex; align-items: center; gap: 14px; min-height: 62px; margin: 0; padding: 13px 17px; border-radius: 10px; font-size: 14px; }
+.quiz-options .option:hover:not(:disabled) { transform: translateX(4px); box-shadow: 0 9px 22px #02061035; }
+.option-letter { display: grid; flex: 0 0 32px; place-items: center; height: 32px; border: 1px solid #4a6179; border-radius: 7px; color: var(--cyan); background: #1c3045; font: 700 12px var(--mono); }
+.option-result { margin-left: auto; color: var(--green); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.option.wrong { border-color: var(--red); color: var(--text); background: #f17b8d20; box-shadow: inset 3px 0 var(--red); }
+.option.wrong .option-letter { color: var(--red); border-color: var(--red); background: #f17b8d18; }
+.option.wrong .option-result { color: var(--red); }
+.option.correct { border-color: var(--green); color: var(--text); background: #4fd1b51d; box-shadow: inset 3px 0 var(--green); }
+.option.correct .option-letter { color: var(--green); border-color: var(--green); background: #4fd1b518; }
+.feedback { display: flex; gap: 16px; margin-top: 19px; animation: answer-in .3s ease-out both; }
+.feedback.is-wrong { border-color: #a34b60; background: #392333; }
+.feedback.is-wrong .eyebrow, .feedback.is-wrong .feedback-symbol { color: var(--red); }
+.feedback.is-correct .eyebrow, .feedback.is-correct .feedback-symbol { color: var(--green); }
+.feedback-symbol { display: grid; flex: 0 0 34px; place-items: center; height: 34px; border: 1px solid currentColor; border-radius: 50%; font-size: 22px; line-height: 1; }
+.feedback-content { min-width: 0; }
+.feedback h3 { margin: 5px 0 6px; font-size: 17px; }
+.feedback p { margin-bottom: 16px; }
+:root[data-theme='light'] .quiz-panel { background: radial-gradient(circle at 100% 0, #d9eee9, transparent 48%), #fff; border-color: var(--line); }
+:root[data-theme='light'] .option-letter { background: #eaf0f7; }
+:root[data-theme='light'] .option.wrong { background: #fbe8ed; }
+:root[data-theme='light'] .option.correct { background: #e4f4ed; }
+:root[data-theme='light'] .feedback.is-wrong { background: #fce8ec; border-color: #dea8b4; }
+:root[data-theme='light'] .lesson-visual figcaption { background: #f4f7fb; }
+:root[data-theme='light'] .visual-title .visual-heading { color: var(--text); }
+:root[data-theme='light'] .lesson-visual svg [fill='url(#lesson-surface)'] { fill: #f3f7fb; }
+:root[data-theme='light'] .lesson-visual svg [fill='url(#lesson-dots)'] { opacity: .35; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
+
 /* Trading workspace */
 .terminal-grid, .practice-layout { display: grid; grid-template-columns: minmax(0, 1fr) 292px; align-items: start; gap: 18px; }
 .terminal-main { min-width: 0; display: grid; gap: 18px; }

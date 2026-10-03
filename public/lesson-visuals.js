@@ -6,7 +6,7 @@ const line = (x1, y1, x2, y2, color = '#304257', dash = '') =>
   `<path d="M${x1} ${y1}L${x2} ${y2}" stroke="${color}" stroke-width="2" ${dash ? `stroke-dasharray="${dash}"` : ''}/>`;
 const box = (x, y, w, h, fill = '#152235', stroke = '#334d65', radius = 8) =>
   `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${radius}" fill="${fill}" stroke="${stroke}"/>`;
-const visual = (title, body, caption) => `<figure class="lesson-visual"><div class="visual-title">${title}<span>ILLUSTRATED MARKET STUDY</span></div><svg viewBox="0 0 760 330" role="img" aria-label="${caption}"><desc>${caption} Invented prices for learning; not a market forecast.</desc>${body}</svg><figcaption>${caption}</figcaption></figure>`;
+const visual = (title, body, caption) => `<figure class="lesson-visual"><div class="visual-title">${title}<span>ILLUSTRATED MARKET STUDY</span></div><svg viewBox="0 0 760 330" role="img" aria-label="${caption}"><desc>${caption} Invented prices for learning; not a market forecast.</desc><defs><linearGradient id="lesson-surface" x2="1" y2="1"><stop stop-color="#17283a"/><stop offset="1" stop-color="#0c1524"/></linearGradient><pattern id="lesson-dots" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".7" fill="#7394ad" opacity=".18"/></pattern></defs><rect width="760" height="330" fill="url(#lesson-surface)"/><rect width="760" height="330" fill="url(#lesson-dots)"/>${body}</svg><figcaption><span class="caption-marker" aria-hidden="true">↳</span>${caption}</figcaption></figure>`;
 
 function candle(x, open, high, low, close, scale = value => 285 - (value - 94) * 11, width = 17) {
   const color = close >= open ? green : red;
