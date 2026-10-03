@@ -202,6 +202,9 @@ label, .form-field { display: block; }
 .lesson-visual figcaption { padding: 13px 19px; border-top: 1px solid #27374b; color: #9cafc5; font-size: 11px; line-height: 1.8; }
 .worked-example { margin: 25px 0; padding: 22px 24px; border: 1px solid #345166; border-radius: 9px; background: #142433; }
 .worked-example .eyebrow { color: var(--cyan); font-size: 9px; }
+.worked-example summary { color: var(--cyan); cursor: pointer; font-size: 13px; font-weight: 650; }
+.worked-example summary:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
+.worked-example:not([open]) { padding-block: 15px; }
 .worked-example p { margin: 10px 0 0; color: #c1d2e4; font-size: 14px; line-height: 1.9; }
 .callout { margin: 25px 0; padding: 19px 22px; border-left: 3px solid var(--green); border-radius: 0 8px 8px 0; background: #4fd1b507; }
 .callout b { font-size: 12px; }
