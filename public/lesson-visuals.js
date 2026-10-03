@@ -6,7 +6,7 @@ const line = (x1, y1, x2, y2, color = '#304257', dash = '') =>
   `<path d="M${x1} ${y1}L${x2} ${y2}" stroke="${color}" stroke-width="2" ${dash ? `stroke-dasharray="${dash}"` : ''}/>`;
 const box = (x, y, w, h, fill = '#152235', stroke = '#334d65', radius = 8) =>
   `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${radius}" fill="${fill}" stroke="${stroke}"/>`;
-const visual = (title, body, caption) => `<figure class="lesson-visual"><div class="visual-title">${title}<span>ILLUSTRATED MARKET STUDY</span></div><svg viewBox="0 0 760 330" role="img" aria-label="${caption}"><desc>${caption} Invented prices for learning; not a market forecast.</desc><defs><linearGradient id="lesson-surface" x2="1" y2="1"><stop stop-color="#17283a"/><stop offset="1" stop-color="#0c1524"/></linearGradient><pattern id="lesson-dots" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".7" fill="#7394ad" opacity=".18"/></pattern></defs><rect width="760" height="330" fill="url(#lesson-surface)"/><rect width="760" height="330" fill="url(#lesson-dots)"/>${body}</svg><figcaption><span class="caption-marker" aria-hidden="true">↳</span>${caption}</figcaption></figure>`;
+const visual = (title, body, caption, kind = '') => `<figure class="lesson-visual ${kind}"><div class="visual-title">${title}<span>ILLUSTRATED MARKET STUDY</span></div><svg viewBox="0 0 760 330" role="img" aria-label="${caption}"><desc>${caption} Invented prices for learning; not a market forecast.</desc><defs><linearGradient id="lesson-surface" x2="1" y2="1"><stop stop-color="#17283a"/><stop offset="1" stop-color="#0c1524"/></linearGradient><pattern id="lesson-dots" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".7" fill="#7394ad" opacity=".18"/></pattern></defs><rect width="760" height="330" fill="url(#lesson-surface)"/><rect width="760" height="330" fill="url(#lesson-dots)"/>${body}</svg><figcaption><span class="caption-marker" aria-hidden="true">↳</span>${caption}</figcaption></figure>`;
 
 function candle(x, open, high, low, close, scale = value => 285 - (value - 94) * 11, width = 17) {
   const color = close >= open ? green : red;
@@ -34,29 +34,25 @@ function singleCandle(open, high, low, close, x, name) {
   return `${candle(x, open, high, low, close, scale, 52)}${label(x, 304, name, muted, 13, 'middle')}`;
 }
 function candleAnatomy() {
-  const top = 45, bottom = 277, high = 69, low = 251;
-  const example = (x, rising) => {
-    const color = rising ? green : red;
-    const bodyTop = 111, bodyBottom = 210;
-    return `${line(x,high,x,low,'#dce8f2')}` +
-      `<rect x="${x-40}" y="${bodyTop}" width="80" height="${bodyBottom-bodyTop}" rx="3" fill="${color}" stroke="#e9f2f8" stroke-width="2"/>` +
-      `${label(x,top,rising?'RISING CANDLE':'FALLING CANDLE',color,11,'middle')}` +
-      `${label(x,bottom,rising?'Close 106 > open 100':'Close 100 < open 106',muted,11,'middle')}`;
-  };
-  return `${box(24,20,344,289,'#152235','#35516a',12)}${box(392,20,344,289,'#152235','#35516a',12)}` +
-    `${example(190,true)}${example(558,false)}` +
-    `${line(190,69,96,69,cyan)}${label(85,73,'HIGH 108',cyan,11,'end')}` +
-    `${line(190,111,96,111,green)}${label(85,115,'CLOSE 106',green,11,'end')}` +
-    `${line(190,210,96,210,green)}${label(85,214,'OPEN 100',green,11,'end')}` +
-    `${line(190,251,96,251,cyan)}${label(85,255,'LOW 98',cyan,11,'end')}` +
-    `${line(558,69,652,69,cyan)}${label(664,73,'HIGH 108',cyan,11)}` +
-    `${line(558,111,652,111,red)}${label(664,115,'OPEN 106',red,11)}` +
-    `${line(558,210,652,210,red)}${label(664,214,'CLOSE 100',red,11)}` +
-    `${line(558,251,652,251,cyan)}${label(664,255,'LOW 98',cyan,11)}`;
+  const text = (x, y, value, anchor = 'start', tone = '') =>
+    `<text class="${tone}" x="${x}" y="${y}" text-anchor="${anchor}" font-size="17" font-weight="700" font-family="Inter,Segoe UI,sans-serif">${value}</text>`;
+  const guide = (x1, y, x2) => `<path d="M${x1} ${y}H${x2}" stroke="#98a6b2" stroke-width="1.5"/>`;
+  const candleShape = (x, color) => `<path d="M${x} 66V265" stroke="#172536" stroke-width="3" stroke-linecap="round"/><rect x="${x-39}" y="116" width="78" height="100" rx="2" fill="${color}" stroke="#172536" stroke-width="2"/>`;
+  return `<rect width="760" height="330" fill="#ffffff"/>` +
+    `${text(242,37,'RISING CANDLE','middle','up-label')}${text(520,37,'FALLING CANDLE','middle','down-label')}` +
+    `${candleShape(242,'#08ad62')}${candleShape(520,'#ea364b')}` +
+    `${guide(128,66,242)}${text(116,71,'High 108','end')}` +
+    `${guide(137,116,203)}${text(125,122,'Close 106','end')}` +
+    `${guide(137,216,203)}${text(125,222,'Open 100','end')}` +
+    `${guide(128,265,242)}${text(116,271,'Low 98','end')}` +
+    `${guide(520,66,634)}${text(646,71,'High 108')}` +
+    `${guide(559,116,626)}${text(638,122,'Open 106')}` +
+    `${guide(559,216,626)}${text(638,222,'Close 100')}` +
+    `${guide(520,265,634)}${text(646,271,'Low 98')}`;
 }
 function candleLesson(slide) {
   if (slide === 0) return visual('OHLC · anatomy of rising and falling candles', candleAnatomy(),
-    'Both candles have a high of 108 and low of 98. Green closes above its open; red closes below. The body shows the open-to-close move, while the wicks show the full range.');
+    'Both candles have a high of 108 and low of 98. Green closes above its open; red closes below. The body shows the open-to-close move, while the wicks show the full range.', 'anatomy-visual');
   if (slide === 1) return visual('A falling period · same four prices',
     `${grid(94,114,value=>272-(value-94)*13)}${singleCandle(106,108,98,100,300,'red candle')}` +
     `${line(325,116,470,116,red)}${label(484,120,'OPEN 106',red)}` +
