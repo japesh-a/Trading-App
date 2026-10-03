@@ -1,12 +1,20 @@
 // All examples use invented prices. Each SVG is a teaching diagram, not market data.
-const green = '#4fd1b5', red = '#f17b8d', cyan = '#65b9f5', muted = '#a6b8cf';
+const green = '#087b65', red = '#b6324d', cyan = '#176ca6', muted = '#52657c';
+const paperColor = color => ({
+  '#304257':'#bccbd9', '#27364b':'#dce5ee', '#334d65':'#c6d4e2',
+  '#152235':'#f4f7fb', '#101b2c':'#f8fafd', '#183437':'#e4f3ed',
+  '#183c38':'#e4f3ed', '#2c2630':'#fbecef', '#3d2533':'#fbecef',
+  '#405342':'#9cb8a5', '#6f87a3':'#60758a', '#7991ae':'#60758a',
+  '#8ca3bf':'#52657c', '#356b7b':'#4b8a9a', '#30475f':'#a9bdcf',
+  '#e7b46d':'#91601b', '#8e7655':'#80551c', '#3b6b6d':'#86aaa6'
+})[color] || color;
 const label = (x, y, value, color = muted, size = 12, anchor = 'start') =>
-  `<text x="${x}" y="${y}" fill="${color}" font-size="${size}" text-anchor="${anchor}" font-family="Inter,Segoe UI,sans-serif">${value}</text>`;
+  `<text x="${x}" y="${y}" style="fill:${paperColor(color)}" font-size="${size}" text-anchor="${anchor}" font-family="Inter,Segoe UI,sans-serif">${value}</text>`;
 const line = (x1, y1, x2, y2, color = '#304257', dash = '') =>
-  `<path d="M${x1} ${y1}L${x2} ${y2}" stroke="${color}" stroke-width="2" ${dash ? `stroke-dasharray="${dash}"` : ''}/>`;
+  `<path d="M${x1} ${y1}L${x2} ${y2}" stroke="${paperColor(color)}" stroke-width="2" ${dash ? `stroke-dasharray="${dash}"` : ''}/>`;
 const box = (x, y, w, h, fill = '#152235', stroke = '#334d65', radius = 8) =>
-  `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${radius}" fill="${fill}" stroke="${stroke}"/>`;
-const visual = (title, body, caption, kind = '') => `<figure class="lesson-visual ${kind}"><div class="visual-title">${title}<span>ILLUSTRATED MARKET STUDY</span></div><svg viewBox="0 0 760 330" role="img" aria-label="${caption}"><desc>${caption} Invented prices for learning; not a market forecast.</desc><defs><linearGradient id="lesson-surface" x2="1" y2="1"><stop stop-color="#17283a"/><stop offset="1" stop-color="#0c1524"/></linearGradient><pattern id="lesson-dots" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".7" fill="#7394ad" opacity=".18"/></pattern></defs><rect width="760" height="330" fill="url(#lesson-surface)"/><rect width="760" height="330" fill="url(#lesson-dots)"/>${body}</svg><figcaption><span class="caption-marker" aria-hidden="true">↳</span>${caption}</figcaption></figure>`;
+  `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${radius}" fill="${paperColor(fill)}" stroke="${paperColor(stroke)}"/>`;
+const visual = (title, body, caption, kind = '') => `<figure class="lesson-visual ${kind}"><div class="visual-title">${title}<span>ILLUSTRATED MARKET STUDY</span></div><svg viewBox="0 0 760 330" role="img" aria-label="${caption}"><desc>${caption} Invented prices for learning; not a market forecast.</desc><rect width="760" height="330" fill="#ffffff"/>${body}</svg><figcaption><span class="caption-marker" aria-hidden="true">↳</span>${caption}</figcaption></figure>`;
 
 function candle(x, open, high, low, close, scale = value => 285 - (value - 94) * 11, width = 17) {
   const color = close >= open ? green : red;
@@ -23,7 +31,7 @@ function candles(values, x0 = 78, step = 42, scale = value => 285 - (value - 94)
 }
 function grid(min = 94, max = 114, y = value => 285 - (value - 94) * 11) {
   const ticks = [96, 100, 104, 108, 112].filter(value => value >= min && value <= max);
-  return `${label(42,24,'ILLUSTRATIVE PRICE', '#6f87a3',9)}${ticks.map(value => `<path d="M40 ${y(value)}H654" stroke="#27364b" stroke-width="1"/>${label(672, y(value) + 4, value, '#8ca3bf', 11)}`).join('')}${line(654,35,654,286,'#27364b')}${line(40,286,654,286,'#27364b')}`;
+  return `${label(42,24,'ILLUSTRATIVE PRICE', '#6f87a3',9)}${ticks.map(value => `<path d="M40 ${y(value)}H654" stroke="#dce5ee" stroke-width="1"/>${label(672, y(value) + 4, value, '#8ca3bf', 11)}`).join('')}${line(654,35,654,286,'#27364b')}${line(40,286,654,286,'#27364b')}`;
 }
 function priceChart(title, values, caption, extras = '') {
   const times = ['09:00','09:45','10:30','11:15','12:00'];
@@ -62,8 +70,8 @@ function candleLesson(slide) {
   return visual('One red candle · two contexts',
     `${box(34,45,328,240)}${box(398,45,328,240)}` +
     `${label(55,71,'RISING SEQUENCE',green)}${label(419,71,'FALLING SEQUENCE',red)}` +
-    `${candles([99,101,100,104,103,107,106],68,40,value=>266-(value-94)*14)}` +
-    `${candles([110,108,109,105,106,102,101],432,40,value=>266-(value-94)*14)}` +
+    `${candles([99,101,100,104,103,107,106],68,40,value=>260-(value-94)*10)}` +
+    `${candles([110,108,109,105,106,102,101],432,40,value=>260-(value-94)*10)}` +
     `${label(55,305,'Last red candle = pullback?',muted)}${label(419,305,'Last red candle = continuation?',muted)}`,
     'The final red candle appears in two different swing sequences. Context changes the interpretation.');
 }
