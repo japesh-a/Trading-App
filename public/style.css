@@ -16,6 +16,19 @@
   --radius: 12px;
   --shadow: 0 12px 38px #0307112b;
   --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  --figure-bg: #101927;
+  --figure-card: #172638;
+  --figure-card-soft: #142235;
+  --figure-good-bg: #183c38;
+  --figure-bad-bg: #3d2533;
+  --figure-ink: #e7eef6;
+  --figure-muted: #afc0d3;
+  --figure-line: #587088;
+  --figure-grid: #2b3e51;
+  --figure-green: #4fd1b5;
+  --figure-red: #f17b8d;
+  --figure-blue: #65b9f5;
+  --figure-amber: #e7b46d;
 }
 :root[data-theme='light'] {
   color-scheme: light;
@@ -32,6 +45,19 @@
   --red: #b6324d;
   --amber: #91601b;
   --shadow: 0 12px 38px #233b5712;
+  --figure-bg: #ffffff;
+  --figure-card: #f4f7fb;
+  --figure-card-soft: #f8fafd;
+  --figure-good-bg: #e4f3ed;
+  --figure-bad-bg: #fbecef;
+  --figure-ink: #172536;
+  --figure-muted: #52657c;
+  --figure-line: #b8c8d8;
+  --figure-grid: #dce5ee;
+  --figure-green: #087b65;
+  --figure-red: #b6324d;
+  --figure-blue: #176ca6;
+  --figure-amber: #91601b;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -242,11 +268,10 @@ label, .form-field { display: block; }
 .btn:active:not(:disabled), .option:active:not(:disabled) { transform: translateY(0) scale(.99); }
 .lesson-visual { box-shadow: 0 18px 42px #03071135; animation: figure-in .45s ease-out both; }
 .lesson-visual svg { background: #101927; }
-.anatomy-visual svg, :root[data-theme='light'] .anatomy-visual svg { background: #fff; }
-.anatomy-visual svg text, :root[data-theme='light'] .anatomy-visual svg text { fill: #172536; }
-.anatomy-visual svg .up-label, :root[data-theme='light'] .anatomy-visual svg .up-label { fill: #047d50; }
-.anatomy-visual svg .down-label, :root[data-theme='light'] .anatomy-visual svg .down-label { fill: #b71e38; }
-.anatomy-visual svg [fill='#ffffff'], :root[data-theme='light'] .anatomy-visual svg [fill='#ffffff'] { fill: #fff; }
+.anatomy-visual svg { background: var(--figure-bg); }
+.anatomy-visual svg text, :root[data-theme='light'] .anatomy-visual svg text { fill: var(--figure-ink); }
+.anatomy-visual svg .up-label, :root[data-theme='light'] .anatomy-visual svg .up-label { fill: var(--figure-green); }
+.anatomy-visual svg .down-label, :root[data-theme='light'] .anatomy-visual svg .down-label { fill: var(--figure-red); }
 .lesson-visual figcaption { display: flex; align-items: flex-start; gap: 10px; background: #142033; }
 .caption-marker { color: var(--green); font-size: 18px; line-height: 1; }
 .visual-title .visual-heading { color: #dee9f5; font-size: 12px; font-weight: 650; letter-spacing: .1px; white-space: normal; }

@@ -1,12 +1,12 @@
 // All examples use invented prices. Each SVG is a teaching diagram, not market data.
-const green = '#087b65', red = '#b6324d', cyan = '#176ca6', muted = '#52657c';
+const green = 'var(--figure-green)', red = 'var(--figure-red)', cyan = 'var(--figure-blue)', muted = 'var(--figure-muted)';
 const paperColor = color => ({
-  '#304257':'#bccbd9', '#27364b':'#dce5ee', '#334d65':'#c6d4e2',
-  '#152235':'#f4f7fb', '#101b2c':'#f8fafd', '#183437':'#e4f3ed',
-  '#183c38':'#e4f3ed', '#2c2630':'#fbecef', '#3d2533':'#fbecef',
-  '#405342':'#9cb8a5', '#6f87a3':'#60758a', '#7991ae':'#60758a',
-  '#8ca3bf':'#52657c', '#356b7b':'#4b8a9a', '#30475f':'#a9bdcf',
-  '#e7b46d':'#91601b', '#8e7655':'#80551c', '#3b6b6d':'#86aaa6'
+  '#304257':'var(--figure-line)', '#27364b':'var(--figure-grid)', '#334d65':'var(--figure-line)',
+  '#152235':'var(--figure-card)', '#101b2c':'var(--figure-card-soft)', '#183437':'var(--figure-good-bg)',
+  '#183c38':'var(--figure-good-bg)', '#2c2630':'var(--figure-bad-bg)', '#3d2533':'var(--figure-bad-bg)',
+  '#405342':'var(--figure-line)', '#6f87a3':'var(--figure-muted)', '#7991ae':'var(--figure-muted)',
+  '#8ca3bf':'var(--figure-muted)', '#356b7b':'var(--figure-blue)', '#30475f':'var(--figure-line)',
+  '#e7b46d':'var(--figure-amber)', '#8e7655':'var(--figure-amber)', '#3b6b6d':'var(--figure-green)'
 })[color] || color;
 const label = (x, y, value, color = muted, size = 12, anchor = 'start') =>
   `<text x="${x}" y="${y}" style="fill:${paperColor(color)}" font-size="${size}" text-anchor="${anchor}" font-family="Inter,Segoe UI,sans-serif">${value}</text>`;
@@ -14,7 +14,7 @@ const line = (x1, y1, x2, y2, color = '#304257', dash = '') =>
   `<path d="M${x1} ${y1}L${x2} ${y2}" stroke="${paperColor(color)}" stroke-width="2" ${dash ? `stroke-dasharray="${dash}"` : ''}/>`;
 const box = (x, y, w, h, fill = '#152235', stroke = '#334d65', radius = 8) =>
   `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${radius}" fill="${paperColor(fill)}" stroke="${paperColor(stroke)}"/>`;
-const visual = (title, body, caption, kind = '') => `<figure class="lesson-visual ${kind}"><div class="visual-title">${title}<span>ILLUSTRATED MARKET STUDY</span></div><svg viewBox="0 0 760 330" role="img" aria-label="${caption}"><desc>${caption} Invented prices for learning; not a market forecast.</desc><rect width="760" height="330" fill="#ffffff"/>${body}</svg><figcaption><span class="caption-marker" aria-hidden="true">↳</span>${caption}</figcaption></figure>`;
+const visual = (title, body, caption, kind = '') => `<figure class="lesson-visual ${kind}"><div class="visual-title">${title}<span>ILLUSTRATED MARKET STUDY</span></div><svg viewBox="0 0 760 330" role="img" aria-label="${caption}"><desc>${caption} Invented prices for learning; not a market forecast.</desc><rect width="760" height="330" fill="var(--figure-bg)"/>${body}</svg><figcaption><span class="caption-marker" aria-hidden="true">↳</span>${caption}</figcaption></figure>`;
 
 function candle(x, open, high, low, close, scale = value => 285 - (value - 94) * 11, width = 17) {
   const color = close >= open ? green : red;
@@ -31,7 +31,7 @@ function candles(values, x0 = 78, step = 42, scale = value => 285 - (value - 94)
 }
 function grid(min = 94, max = 114, y = value => 285 - (value - 94) * 11) {
   const ticks = [96, 100, 104, 108, 112].filter(value => value >= min && value <= max);
-  return `${label(42,24,'ILLUSTRATIVE PRICE', '#6f87a3',9)}${ticks.map(value => `<path d="M40 ${y(value)}H654" stroke="#dce5ee" stroke-width="1"/>${label(672, y(value) + 4, value, '#8ca3bf', 11)}`).join('')}${line(654,35,654,286,'#27364b')}${line(40,286,654,286,'#27364b')}`;
+  return `${label(42,24,'ILLUSTRATIVE PRICE', '#6f87a3',9)}${ticks.map(value => `<path d="M40 ${y(value)}H654" stroke="var(--figure-grid)" stroke-width="1"/>${label(672, y(value) + 4, value, '#8ca3bf', 11)}`).join('')}${line(654,35,654,286,'#27364b')}${line(40,286,654,286,'#27364b')}`;
 }
 function priceChart(title, values, caption, extras = '') {
   const times = ['09:00','09:45','10:30','11:15','12:00'];
@@ -44,11 +44,11 @@ function singleCandle(open, high, low, close, x, name) {
 function candleAnatomy() {
   const text = (x, y, value, anchor = 'start', tone = '') =>
     `<text class="${tone}" x="${x}" y="${y}" text-anchor="${anchor}" font-size="17" font-weight="700" font-family="Inter,Segoe UI,sans-serif">${value}</text>`;
-  const guide = (x1, y, x2) => `<path d="M${x1} ${y}H${x2}" stroke="#98a6b2" stroke-width="1.5"/>`;
-  const candleShape = (x, color) => `<path d="M${x} 66V265" stroke="#172536" stroke-width="3" stroke-linecap="round"/><rect x="${x-39}" y="116" width="78" height="100" rx="2" fill="${color}" stroke="#172536" stroke-width="2"/>`;
-  return `<rect width="760" height="330" fill="#ffffff"/>` +
+  const guide = (x1, y, x2) => `<path d="M${x1} ${y}H${x2}" stroke="var(--figure-line)" stroke-width="1.5"/>`;
+  const candleShape = (x, color) => `<path d="M${x} 66V265" stroke="var(--figure-ink)" stroke-width="3" stroke-linecap="round"/><rect x="${x-39}" y="116" width="78" height="100" rx="2" fill="${color}" stroke="var(--figure-ink)" stroke-width="2"/>`;
+  return `<rect width="760" height="330" fill="var(--figure-bg)"/>` +
     `${text(242,37,'RISING CANDLE','middle','up-label')}${text(520,37,'FALLING CANDLE','middle','down-label')}` +
-    `${candleShape(242,'#08ad62')}${candleShape(520,'#ea364b')}` +
+    `${candleShape(242,green)}${candleShape(520,red)}` +
     `${guide(128,66,242)}${text(116,71,'High 108','end')}` +
     `${guide(137,116,203)}${text(125,122,'Close 106','end')}` +
     `${guide(137,216,203)}${text(125,222,'Open 100','end')}` +
@@ -185,7 +185,7 @@ function volumeLesson(slide) {
   const vols=[35,42,38,48,44,86,52,91,45,57];
   return visual(['Align volume with price','Compare with a baseline','Check what the feed counts'][slide],
     `${grid(94,114,value=>231-(value-94)*9)}${candles(closes,76,55,value=>231-(value-94)*9)}` +
-    `${vols.map((v,i)=>`<rect x="${68+i*55}" y="${292-v*.62}" width="16" height="${v*.62}" fill="${i===5||i===7?green:'#356b7b'}"/>`).join('')}` +
+    `${vols.map((v,i)=>`<rect x="${68+i*55}" y="${292-v*.62}" width="16" height="${v*.62}" fill="${i===5||i===7?green:cyan}"/>`).join('')}` +
     `${slide===1?`${line(42,262,654,262,cyan,'5 5')}${label(672,266,'Baseline',cyan,10)}`:''}` +
     `${line(42,233,654,233)}${label(45,319,'Volume bars align with the price candles above',cyan,11)}`,
     'The lower histogram shows synthetic activity bars aligned with the price candles. A taller bar means more measured activity.');
