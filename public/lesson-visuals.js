@@ -33,14 +33,30 @@ function singleCandle(open, high, low, close, x, name) {
   const scale = value => 272 - (value - 94) * 13;
   return `${candle(x, open, high, low, close, scale, 52)}${label(x, 304, name, muted, 13, 'middle')}`;
 }
+function candleAnatomy() {
+  const top = 45, bottom = 277, high = 69, low = 251;
+  const example = (x, rising) => {
+    const color = rising ? green : red;
+    const bodyTop = 111, bodyBottom = 210;
+    return `${line(x,high,x,low,'#dce8f2')}` +
+      `<rect x="${x-40}" y="${bodyTop}" width="80" height="${bodyBottom-bodyTop}" rx="3" fill="${color}" stroke="#e9f2f8" stroke-width="2"/>` +
+      `${label(x,top,rising?'RISING CANDLE':'FALLING CANDLE',color,11,'middle')}` +
+      `${label(x,bottom,rising?'Close 106 > open 100':'Close 100 < open 106',muted,11,'middle')}`;
+  };
+  return `${box(24,20,344,289,'#152235','#35516a',12)}${box(392,20,344,289,'#152235','#35516a',12)}` +
+    `${example(190,true)}${example(558,false)}` +
+    `${line(190,69,96,69,cyan)}${label(85,73,'HIGH 108',cyan,11,'end')}` +
+    `${line(190,111,96,111,green)}${label(85,115,'CLOSE 106',green,11,'end')}` +
+    `${line(190,210,96,210,green)}${label(85,214,'OPEN 100',green,11,'end')}` +
+    `${line(190,251,96,251,cyan)}${label(85,255,'LOW 98',cyan,11,'end')}` +
+    `${line(558,69,652,69,cyan)}${label(664,73,'HIGH 108',cyan,11)}` +
+    `${line(558,111,652,111,red)}${label(664,115,'OPEN 106',red,11)}` +
+    `${line(558,210,652,210,red)}${label(664,214,'CLOSE 100',red,11)}` +
+    `${line(558,251,652,251,cyan)}${label(664,255,'LOW 98',cyan,11)}`;
+}
 function candleLesson(slide) {
-  if (slide === 0) return visual('OHLC · anatomy of one candle',
-    `${grid(94,114,value=>272-(value-94)*13)}${singleCandle(100,108,98,106,300,'15-minute candle')}` +
-    `${line(300,90,475,90,cyan)}${label(490,94,'HIGH 108',cyan)}` +
-    `${line(326,116,475,116,green)}${label(490,120,'CLOSE 106',green)}` +
-    `${line(326,194,475,194,green)}${label(490,198,'OPEN 100',green)}` +
-    `${line(300,220,475,220,cyan)}${label(490,224,'LOW 98',cyan)}`,
-    'A green candle with open 100, high 108, low 98 and close 106. The body spans open to close.');
+  if (slide === 0) return visual('OHLC · anatomy of rising and falling candles', candleAnatomy(),
+    'Both candles have a high of 108 and low of 98. Green closes above its open; red closes below. The body shows the open-to-close move, while the wicks show the full range.');
   if (slide === 1) return visual('A falling period · same four prices',
     `${grid(94,114,value=>272-(value-94)*13)}${singleCandle(106,108,98,100,300,'red candle')}` +
     `${line(325,116,470,116,red)}${label(484,120,'OPEN 106',red)}` +

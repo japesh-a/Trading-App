@@ -2,7 +2,7 @@
 // Diagrams are selected by lesson and slide index in public/lesson-visuals.js.
 export const lessonContent = [
   ['Candles: the four prices', 4, [
-    ['One candle, four prices', 'A candle summarises one chosen period. In this example it opens at 100, reaches 108, falls to 98 and closes at 106. The body joins open and close; the wicks reach the high and low. It does not show the order in which those prices occurred.', 'Which two prices make the body, and which two mark the full range?'],
+    ['One period, four prices', 'These two candles show the same high of 108 and low of 98. The rising candle opens at 100 and closes at 106; the falling candle swaps those two prices. In both, the body joins open and close, while the wicks reach the high and low. Neither candle shows the order in which those prices occurred.', 'Which two prices make the body, and which two mark the full range?'],
     ['Read a falling candle', 'This candle opens at 106 and closes at 100, so its body is red. Its high at 108 and low at 98 sit beyond the body. Red describes this period only; it does not predict the next one.', 'Find the open and close before looking at the colour.'],
     ['Place it in context', 'A red candle inside a rising sequence may be a brief pullback. The same red candle after several lower highs may fit a decline. Compare neighbouring candles and swing points before giving one candle a meaning.', 'What changes between the two sequences even though the final candle is the same?']
   ]],
