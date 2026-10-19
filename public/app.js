@@ -6,6 +6,7 @@ import {requestService,serviceConfig} from './market-data.js';
 import {getTrades,getSession,saveSession} from './trade-store.js';
 import {initializeAccounts,getCurrentAccount} from './accounts.js';
 import {primaryAction,saveStatus,stateHTML} from './ui-model.js';
+import {wakeUpStatus} from './a11y-model.js';
 let disposePage=()=>{},viewVersion=0,toastTimer;
 
 const $=selector=>document.querySelector(selector);
@@ -69,4 +70,5 @@ if(!window.__WICKLUME_STATIC__&&['localhost','127.0.0.1'].includes(location.host
 
  liveEvents.onmessage=()=>location.reload();
 }
-try{await initializeAccounts();[state,lessons]=await Promise.all([api('/api/progress'),api('/api/lessons')]);loadStreak();navigate(location.hash.slice(1)||'home')}catch(error){app.setAttribute('aria-busy','false');updateSaveStatus({failed:true});app.innerHTML='<h1>Unable to load your workspace.</h1>'+stateHTML('error',{title:'Your workspace did not load',body:'Your saved work is safe. Use Sign in to reconnect or continue as a guest, or try loading again.'});app.querySelector('[data-retry]').id='retry-workspace';$('#retry-workspace').onclick=()=>location.reload();}
+const bootStart=Date.now(),bootTimer=setInterval(()=>{const wake=wakeUpStatus(Date.now()-bootStart);if(wake.kind==='waking'||wake.kind==='slow')app.innerHTML=`<p role="status" class="wake-note">${wake.message}</p>`;},2000);
+try{await initializeAccounts();[state,lessons]=await Promise.all([api('/api/progress'),api('/api/lessons')]);loadStreak();navigate(location.hash.slice(1)||'home')}catch(error){app.setAttribute('aria-busy','false');updateSaveStatus({failed:true});app.innerHTML='<h1>Unable to load your workspace.</h1>'+stateHTML('error',{title:'Your workspace did not load',body:'Your saved work is safe. Use Sign in to reconnect or continue as a guest, or try loading again.'});app.querySelector('[data-retry]').id='retry-workspace';$('#retry-workspace').onclick=()=>location.reload();}finally{clearInterval(bootTimer)}

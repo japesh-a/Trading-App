@@ -5,6 +5,7 @@ import {loadDaily,loadDailyContext,loadPaperMarket,loadPaperTimeframe,paperQuote
 import {TIMEFRAMES,DAILY_TIMEFRAMES,PAPER_TIMEFRAMES,aggregateCandles,withQuote,refreshCachedCharts} from './timeframes.js';
 import {tradesCsv,matchesTradeSearch} from './journal-utils.js';
 import {feedBadge} from './ui-model.js';
+import {chartAltHTML} from './a11y-model.js';
 import {saveDisplayName} from './accounts.js';
 
 export const escapeHTML=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -78,7 +79,8 @@ export function renderTrading(container,{mode='daily',onToast=()=>{}}){
       if(mode==='paper')poller=setInterval(()=>tickPaper(token),data.demo?1000:8000);
     }catch(error){if(!disposed&&token===generation)q('#workspace-body').innerHTML=`<div class="empty-state"><h2>Market data is unavailable</h2><p>${errorText(error)}</p><button class="btn" data-page="${mode==='daily'?'practice':'paper'}">Try again</button></div>`;}
   }
-  function persist(){if(!data)return;saveSession(sessionKey,{data:mode==='daily'?data:undefined,feedVersion:data.feedVersion,trade,cursor,speed,drawings,reasoning,resultSaved,official,orderType,entryDraft,timeframe,orderDraft,side});}
+  function updateChartAlt(){const el=q('#chart-alt');if(!el||!data)return;try{el.innerHTML=chartAltHTML(chartCandles(),{symbol:instrument.id,timeframe,decimals:instrument.decimals,synthetic:!!data.demo});}catch{/* The visual chart still works. */}}
+  function persist(){updateChartAlt();if(!data)return;saveSession(sessionKey,{data:mode==='daily'?data:undefined,feedVersion:data.feedVersion,trade,cursor,speed,drawings,reasoning,resultSaved,official,orderType,entryDraft,timeframe,orderDraft,side});}
   function visible(){return mode==='daily'?[...data.history,...(data.future||[]).slice(0,cursor)]:data.candles;}
   function chartCandles(){
     if(mode==='paper')return timeframe==='1m'?data.candles.slice(-180):viewCandles;
@@ -135,7 +137,8 @@ export function renderTrading(container,{mode='daily',onToast=()=>{}}){
     q('.execution-notes p').textContent='Market orders enter at the displayed quote. Chosen-price orders wait for that level; if a candle crosses it, the fill is at the selected price and exits start on the following candle. Stop gaps fill at the next available open; targets fill at their level. If a candle touches both exits, the stop is counted first. Zero fees and spread in this simulation.';
     if(mode==='paper'){q('#close-position').disabled=!['open','pending'].includes(trade?.status);q('#close-position').textContent=trade?.status==='pending'?'Cancel pending entry':'Close position';}
     chart=new TradingChart(q('#trading-chart'),{candles:chartCandles(),symbol:instrument.id+(data.demo?' · SYNTHETIC':''),decimals:instrument.decimals,drawings,onToolChange:tool=>{container.querySelectorAll('[data-tool]').forEach(button=>{const active=button.dataset.tool===tool;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});},onDrawingsChange:value=>{drawings=value;persist();},onLevelChange:levels=>{if(trade){setChartLevels();return;}if(Number.isFinite(levels.entry)&&Math.abs(levels.entry-draft().entry)>10**(-instrument.decimals)*.51){orderType='trigger';entryDraft=levels.entry;q('#order-type').value='trigger';q('#order-entry').readOnly=false;q('#order-entry').closest('.form-field').querySelector('label').textContent='Entry · drag line or type a price';q('#order-entry').value=formatPrice(levels.entry);q('#place-order').textContent=mode==='daily'?'Lock price entry & start replay':'Place price entry';}q('#order-stop').value=formatPrice(levels.stopLoss);q('#order-target').value=formatPrice(levels.takeProfit);updateDraft();persist();}});
-    defaults();wire();updateUI();if(resultSaved)showResult();
+    q('.chart-area').insertAdjacentHTML('afterend','<details class="chart-alt" id="chart-alt"></details>');
+    defaults();wire();updateUI();updateChartAlt();if(resultSaved)showResult();
     if(mode==='paper'&&!data.connected&&['open','pending'].includes(trade?.status)){
       for(const bar of data.candles.filter(c=>c.time>(trade.entryTime??trade.placedTime)&&c.time+60<Date.now()/1000)){trade=advanceTrade(trade,bar);if(trade.status==='closed')break;}
       if(trade.status==='closed')finish();else persist();

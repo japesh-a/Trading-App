@@ -851,3 +851,17 @@ label, .form-field { display: block; }
   .order-ticket button, .order-ticket input, .order-ticket select { min-height: 44px; }
   main { padding-bottom: 24px; }
 }
+
+/* Accessibility and resilience (F22) */
+.chart-alt { margin: 0; padding: 10px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; line-height: 1.6; }
+.chart-alt summary { cursor: pointer; min-height: 24px; color: var(--text); }
+.chart-alt table { width: 100%; margin-top: 8px; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.chart-alt caption { text-align: left; padding-bottom: 4px; }
+.chart-alt th, .chart-alt td { padding: 4px 8px; border-bottom: 1px solid var(--line); text-align: left; font-weight: 500; }
+.wake-note { padding: 20px; color: var(--muted); font-size: 14px; }
+.status-pill.save-status.error::before { content: '⚠ '; }
+.status-pill.save-status.offline::before { content: '⌀ '; }
+@media (pointer: coarse) {
+  button, .btn, .chart-tools button, .chart-toolbar > button, .chart-toolbar select, .timeframe-tabs button, .side-toggle button,
+  .market-tabs button, .scenario-tabs button, .view-tabs button, input, select, summary { min-height: 44px; min-width: 44px; }
+}
