@@ -6,6 +6,7 @@ import { createAuditLog, mayRecordVerified } from './security.mjs';
 import { lessons, publicLessons, correctIndex } from './curriculum.mjs';
 import { previousDayChallenge, coinbaseCandles, coinbaseChartCandles, utcDay } from './public/market-data.js';
 import { TIMEFRAMES } from './public/timeframes.js';
+import { dataLabel, historyQuality, createProviderHealth, simulationAssumptions } from './market-quality.mjs';
 import { INITIAL_BALANCE, INSTRUMENTS, openTrade, advanceTrade, closeTrade, cancelPendingTrade, markToMarket, summarizeTrades } from './public/trade-engine.js';
 
 class ServiceError extends Error {
@@ -123,14 +124,18 @@ export function createTradingService(db, options = {}) {
     return trade;
   };
 
+  const providerHealth = createProviderHealth(clock);
   const providerJson = async url => {
+    const provider = String(url).includes('coinbase') ? 'Coinbase' : 'Twelve Data';
     try {
       const response = await fetchImpl(url, { signal: AbortSignal.timeout(10000) });
       if (!response.ok) fail(503, 'The market-data provider is unavailable. Orders are paused.');
       const value = await response.json();
       if (value.status === 'error') fail(503, 'The configured provider cannot supply this instrument. Check its symbol and data entitlement.');
+      providerHealth.success(provider);
       return value;
     } catch (error) {
+      providerHealth.failure(provider);
       if (error instanceof ServiceError) throw error;
       fail(503, 'The market-data connection was interrupted. Orders are paused.');
     }
@@ -310,7 +315,8 @@ export function createTradingService(db, options = {}) {
         // A verified Google email says nothing about the learner's age; eligibility is a separate step.
         googleVerifiesAge: false, initialBalance: INITIAL_BALANCE,
         dailyRiskLimit: 100, execution: 'Educational simulation; no spread, fees, financing or margin. Stops may slip; candles use stop-first execution.',
-        paperExecution: 'Quote polling with completed-candle reconciliation. Partial entry minutes and provider-history gaps cannot be reconstructed exactly.',
+        simulation: simulationAssumptions(env),
+        paperExecution:'Quote polling with completed-candle reconciliation. Partial entry minutes and provider-history gaps cannot be reconstructed exactly.',
       });
       if (route === '/session' && req.method === 'POST') {
         rateLimit(`new-session:${ip}`, 12, 86400000);
@@ -404,8 +410,11 @@ export function createTradingService(db, options = {}) {
       if (route === '/market' && req.method === 'GET') {
         const symbol = checkSymbol(url.searchParams.get('symbol') || 'BTC');
         const timeframe = url.searchParams.get('timeframe') || '1m';
-        return send(await getChartMarket(symbol, timeframe));
+        const market = await getChartMarket(symbol, timeframe);
+        const label = dataLabel({ demo: market.demo, quoteTime: market.time, nowSeconds: clock() / 1000 });
+        return send({ ...market, dataStatus: label, quality: historyQuality(market.candles, market.interval, symbol) });
       }
+      if (route === '/market/health' && req.method === 'GET') return send({ providers: providerHealth.report(), assumptions: simulationAssumptions(env) });
       if (route === '/quote' && req.method === 'GET') return send(await getQuote(checkSymbol(url.searchParams.get('symbol') || 'BTC')));
       if (route === '/paper/open' && req.method === 'POST') {
         const body = await requestBody(req), symbol = checkSymbol(body.symbol || 'BTC');
