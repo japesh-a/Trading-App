@@ -80,3 +80,9 @@ No real orders, deposits or broker credentials. No payments. No public profiles 
 ## Streaks (F17)
 
 `streak.mjs` stores qualifying events in `activity_events` (migration 9) per account: `lesson_quiz` (a lesson's quiz finished), `coach_set` (both daily coach questions answered) and `challenge` (a daily challenge committed with its written reasoning). Days are UTC, several events on one day count once, and profit, accuracy and order count are ignored. `GET /api/trading/streak` (accounts only) returns current and best streak and the UTC week. Days already saved before migration 9 are kept as `legacy` events. Events are included in the data export and erased with the account.
+
+## Journal (F18)
+
+`journal.mjs` stores structured entries per account in `journal_entries` (migration 10). Each entry has immutable `facts` (copied from the server's own closed paper trade, or the plan as first recorded for no-trade/manual entries), editable `notes` (plan, setup tag, tags, emotion, self-assessment, risk %, outcome, reflection), `drawings` (50 KB cap), an optional SVG `snapshot` (200 KB cap, scripts refused), a `revision` and a server-set `provenance` (`verified`, `imported`, `synthetic`, `self_reported`).
+
+Routes (accounts only): `GET /journal/entries[?since=ms&snapshots=1]`, `POST /journal/entries`, `POST /journal/entries/update` (needs `baseRevision`; a stale edit returns 409 with the current entry and the differing fields), `POST /journal/entries/delete`, `GET /journal/export.csv` (shared CSV exporter, so formula neutralisation is kept). Entries are in `/privacy/export` (without images) and erased with the account.

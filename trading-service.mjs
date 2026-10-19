@@ -9,6 +9,7 @@ import { recordGraduation, masteryReport } from './mastery.mjs';
 import { revisionSuggestions, revisionThreshold, checkPractice } from './revision.mjs';
 import { todaySession, answerItem } from './daily-coach.mjs';
 import { recordActivity, streakReport } from './streak.mjs';
+import { createEntry, updateEntry, deleteEntry, listEntries, journalCsv } from './journal.mjs';
 import { runMigrations } from './migrations.mjs';
 import { createAuditLog, mayRecordVerified } from './security.mjs';
 import { lessons, publicLessons, correctIndex } from './curriculum.mjs';
@@ -23,19 +24,20 @@ class ServiceError extends Error {
 const fail = (status, message) => { throw new ServiceError(status, message); };
 const hash = value => createHash('sha256').update(value).digest('hex');
 const emptyProgress = () => ({ completed: [], challenges: [], attempts: 0, correct: 0, days: [], answers: {} });
+const JOURNAL_BODY_LIMIT = 300 * 1024; // room for a snapshot (200 KB) plus drawings (50 KB) and notes
 const jsonParse = value => JSON.parse(value);
 const text = (value, limit) => typeof value === 'string' ? value.trim().slice(0, limit) : '';
 const name = value => text(value, 40).replace(/[\u0000-\u001f\u007f]/g, '') || 'Learner';
 const positive = value => typeof value === 'number' && Number.isFinite(value) && value > 0;
 
-async function requestBody(req) {
-  if (Number(req.headers['content-length']) > 16384) fail(413, 'Request exceeds the 16 KB limit.');
+async function requestBody(req, limit = 16384) {
+  if (Number(req.headers['content-length']) > limit) fail(413, `Request exceeds the ${limit / 1024} KB limit.`);
   if (!String(req.headers['content-type'] || '').toLowerCase().startsWith('application/json')) fail(415, 'Send application/json.');
   const chunks = [];
   let length = 0;
   for await (const chunk of req) {
     length += chunk.length;
-    if (length > 16384) fail(413, 'Request exceeds the 16 KB limit.');
+    if (length > limit) fail(413, `Request exceeds the ${limit / 1024} KB limit.`);
     chunks.push(chunk);
   }
   try {
@@ -417,6 +419,33 @@ export function createTradingService(db, options = {}) {
           return send(result.session);
         }
       }
+      if (route.startsWith('/journal/')) {
+        if (!session.account_id) fail(401, 'Sign in to keep a synced journal.');
+        if (route === '/journal/entries' && req.method === 'GET') {
+          const since = Number(url.searchParams.get('since') ?? 0);
+          return send({ entries: listEntries(db, session.account_id, { since: Number.isFinite(since) ? since : 0, snapshots: url.searchParams.get('snapshots') === '1' }), serverTime: clock() });
+        }
+        if (route === '/journal/export.csv' && req.method === 'GET') {
+          res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': 'attachment; filename="wicklume-journal.csv"' });
+          res.end(journalCsv(db, session.account_id));
+          return true;
+        }
+        if (route === '/journal/entries' && req.method === 'POST') {
+          const body = await requestBody(req, JOURNAL_BODY_LIMIT);
+          const paperTrade = body.kind === 'paper' ? paperTrades(session.id).find(t => t.id === body.tradeId && t.status === 'closed') ?? null : null;
+          return send({ entry: createEntry(db, session.account_id, body, { paperTrade, now: clock() }) }, 201);
+        }
+        if (route === '/journal/entries/update' && req.method === 'POST') {
+          const result = updateEntry(db, session.account_id, await requestBody(req, JOURNAL_BODY_LIMIT), clock());
+          return result.conflict
+            ? send({ error: 'This entry was changed on another device. Review the latest version, then save again.', current: result.current, differing: result.differing }, 409)
+            : send({ entry: result.entry });
+        }
+        if (route === '/journal/entries/delete' && req.method === 'POST') {
+          const body = await requestBody(req);
+          return deleteEntry(db, session.account_id, body.id) ? send({ deleted: true }) : send({ error: 'No journal entry with that id.' }, 404);
+        }
+      }
       if (route === '/journal' && req.method === 'GET') return send({ trades: [
         ...paperTrades(session.id),
         ...db.prepare('SELECT value FROM trading_daily_results WHERE session_id=?').all(session.id).map(row => jsonParse(row.value)),
@@ -579,6 +608,7 @@ export function createTradingService(db, options = {}) {
       if (res.headersSent) return true;
       if (error instanceof ServiceError) return send({ error: error.message }, error.status);
       if (error instanceof RangeError) return send({ error: error.message }, 400);
+      if (error?.clientSafe && Number.isInteger(error.status)) return send({ error: error.message }, error.status);
       if (/UNIQUE constraint/.test(String(error?.message))) return send({ error: 'This submission was already recorded.' }, 409);
       return send({ error: 'The trading service could not complete this request.' }, 500);
     }
