@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { exportAttempts } from './scenario-attempt.mjs';
 import { exportCoach } from './daily-coach.mjs';
 import { eraseJournal, exportJournal } from './journal.mjs';
+import { erasePlaybook, exportPlaybook } from './playbook.mjs';
 import { exportActivity } from './streak.mjs';
 
 export const TERMS_VERSION = '2026-10-draft';
@@ -45,6 +46,7 @@ export function eraseAccount(db, accountId) {
     db.prepare('DELETE FROM scenario_attempts WHERE account_id=?').run(accountId);
     db.prepare('DELETE FROM daily_coach_sessions WHERE account_id=?').run(accountId);
     eraseJournal(db, accountId);
+    erasePlaybook(db, accountId);
     db.prepare('DELETE FROM activity_events WHERE account_id=?').run(accountId);
     db.prepare('DELETE FROM scenario_assignments WHERE account_id=?').run(accountId);
     db.prepare('UPDATE audit_log SET account_id=NULL WHERE account_id=?').run(accountId);
@@ -106,6 +108,7 @@ export function exportAccount(db, session, now) {
     scenarioAttempts: exportAttempts(db, session.account_id),
     dailyCoach: exportCoach(db, session.account_id),
     journalEntries: exportJournal(db, session.account_id),
+    playbook: exportPlaybook(db, session.account_id),
     activityHistory: exportActivity(db, session.account_id),
     note: 'Passwords, session tokens and security logs are not included.',
   };

@@ -4,6 +4,7 @@
 // (reported as R and %, never as a score input). AI feedback plays no part in it.
 // Concealment reduces answer lookup; it does not guarantee cheat prevention.
 import { createHash } from 'node:crypto';
+import { summariseCheck } from './playbook.mjs';
 import { revealView } from './scenario-bank.mjs';
 import { revealIndexedOutcome, rMultiple, percentMove } from './scenario-index.mjs';
 
@@ -130,6 +131,8 @@ export function scoreAttempt(c, fill) {
     scores: { ruleAdherence, riskCalculation, reasoning, process: Math.round(parts.reduce((a, b) => a + b, 0) / parts.length) },
     planned, checklist: c.checklist.length ? { checked: c.checklist.filter(x => x.checked).length, total: c.checklist.length } : null,
     completed: true,
+    // The learner's own rules, self-assessed. Shown for reflection; never part of a score.
+    playbook: c.playbookCheck ? summariseCheck(c.playbookCheck) : null,
     learningCredit: true, // any valid, reasoned commitment completes the day; profit/loss never gates it
     noTradeRecognised: c.decision === 'none' && reasoning >= 75 && ruleAdherence >= 75,
     // P/L in R and % is shown for learning and is deliberately not part of any score or ranking.
@@ -143,8 +146,11 @@ const view = r => ({ assignmentId: r.assignment_id, day: r.day, committedAt: r.c
 
 // Returns { attempt, created, conflict }. The scenario must be the one already assigned to this account.
 // A repeat returns the saved attempt; `conflict` is true when the repeat differs from what was locked in.
-export function commitAttempt({ db, assignment, scenario, body, now = Date.now() }) {
-  const commitment = normaliseCommitment(body), hash = payloadHash(commitment);
+// `playbookCheck` is the server-built F27 snapshot; it is never read from the request body.
+export function commitAttempt({ db, assignment, scenario, body, playbookCheck = null, now = Date.now() }) {
+  const commitment = normaliseCommitment(body);
+  if (playbookCheck) commitment.playbookCheck = playbookCheck;
+  const hash = payloadHash(commitment);
   const existing = row(db, assignment.account_id, assignment.day);
   if (existing) return { attempt: view(existing), created: false, conflict: existing.payload_hash !== hash };
   const result = scoreAttempt(commitment, simulateFill(commitment, revealIndexedOutcome(scenario)));

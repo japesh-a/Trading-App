@@ -10,6 +10,7 @@ import { revisionSuggestions, revisionThreshold, checkPractice } from './revisio
 import { todaySession, answerItem } from './daily-coach.mjs';
 import { recordActivity, streakReport } from './streak.mjs';
 import { createEntry, updateEntry, deleteEntry, listEntries, journalCsv } from './journal.mjs';
+import { PROMPTS, PROMPTS_VERSION, currentPlaybook, savePlaybook, buildCheck, recordCheck, findCheck } from './playbook.mjs';
 import { runMigrations } from './migrations.mjs';
 import { createAuditLog, mayRecordVerified } from './security.mjs';
 import { lessons, publicLessons, correctIndex } from './curriculum.mjs';
@@ -359,7 +360,7 @@ export function createTradingService(db, options = {}) {
         const body = await requestBody(req);
         const found = findAssignedScenario(db, session.account_id, body.assignmentId, await scenarioPool());
         if (!found) fail(404, 'That challenge is not assigned to you.');
-        const { attempt, created, conflict } = commitAttempt({ db, assignment: found.assignment, scenario: found.scenario, body, now: clock() });
+        const { attempt, created, conflict } = commitAttempt({ db, assignment: found.assignment, scenario: found.scenario, body, playbookCheck: body.playbook === undefined ? null : buildCheck(db, session.account_id, body.playbook), now: clock() });
         if (conflict) return send({ error: 'Your decision is already locked in. Here is what you committed.', locked: true, ...replayView(attempt, found.scenario) }, 409);
         // A committed decision always carries written reasoning, so it earns the day's streak whatever the outcome.
         if (created) recordActivity(db, session.account_id, utcDay(clock()), 'challenge', found.assignment.public_id, clock());
@@ -417,6 +418,21 @@ export function createTradingService(db, options = {}) {
           // The streak needs the objective questions finished; the reflection stays optional.
           if (result.session.items.filter(item => item.kind !== 'reflection').every(item => item.done)) recordActivity(db, session.account_id, common.day, 'coach_set', '', clock());
           return send(result.session);
+        }
+      }
+      if (route.startsWith('/playbook')) {
+        if (!session.account_id) fail(401, 'Sign in to keep a personal rules checklist.');
+        if (route === '/playbook' && req.method === 'GET') return send({ playbook: currentPlaybook(db, session.account_id), prompts: PROMPTS, promptsVersion: PROMPTS_VERSION });
+        if (route === '/playbook' && req.method === 'POST') return send({ playbook: savePlaybook(db, session.account_id, await requestBody(req), clock()) });
+        if (route === '/playbook/paper-check' && req.method === 'POST') {
+          const body = await requestBody(req);
+          if (!paperTrades(session.id).some(t => t.id === body.tradeId)) fail(404, 'No paper trade with that id.');
+          const { check, created } = recordCheck(db, session.account_id, { context: 'paper', ref: body.tradeId, check: buildCheck(db, session.account_id, body.playbook) }, clock());
+          return send({ check, created }, created ? 201 : 200);
+        }
+        if (route === '/playbook/paper-check' && req.method === 'GET') {
+          const check = findCheck(db, session.account_id, 'paper', url.searchParams.get('tradeId'));
+          return check ? send({ check }) : send({ error: 'No checklist was recorded for that trade.' }, 404);
         }
       }
       if (route.startsWith('/journal/')) {
