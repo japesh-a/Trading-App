@@ -7,6 +7,7 @@ export const FAMILIES = ['trend_pullback', 'breakout_retest', 'range_rejection',
 export const DIFFICULTIES = ['beginner', 'intermediate', 'advanced'];
 export const MIN_VISIBLE_BARS = 20;
 export const MIN_OUTCOME_BARS = 6;
+export const NO_TRADE_CRITERIA_REASONS = ['unclear_structure', 'volatile_conditions', 'poor_risk_reward', 'outside_my_rules'];
 const SOURCES = ['synthetic', 'historical'];
 
 const contentDir = fileURLToPath(new URL('./scenario-content/', import.meta.url));
@@ -78,6 +79,11 @@ export function validateScenario(s) {
   if (!n || !n.summary || !n.visibleEvidence || !n.alternativeView) e.push('teaching notes need summary, visibleEvidence and alternativeView');
   if (!['win', 'loss', 'ambiguous', 'none'].includes(s.outcomeLabel)) e.push('outcomeLabel must be win, loss, ambiguous or none');
   if (s.family === 'no_trade' && (s.outcomeLabel === 'win' || s.outcomeLabel === 'loss')) e.push('no_trade scenarios cannot have a win/loss label');
+  const c = s.noTradeCriteria;
+  if (c !== undefined) {
+    if (!c || !Array.isArray(c.reasons) || !c.reasons.length || !c.reasons.every(r => NO_TRADE_CRITERIA_REASONS.includes(r))) e.push('noTradeCriteria.reasons must list known no-trade reasons');
+    if (!c || !Array.isArray(c.evidenceTerms) || !c.evidenceTerms.length || c.evidenceTerms.length > 20 || !c.evidenceTerms.every(t => typeof t === 'string' && /^[a-z']{3,20}$/.test(t))) e.push('noTradeCriteria.evidenceTerms must be 1-20 lowercase words describing visible evidence');
+  }
   return e;
 }
 

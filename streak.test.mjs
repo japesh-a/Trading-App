@@ -108,6 +108,8 @@ test('a daily challenge committed with reasoning counts whether it wins or loses
     const plan = { assignmentId: assigned.assignmentId, decision: 'none', reasoning: { observation: 'Price is chopping sideways with no clear structure on this chart.', invalidation: 'A clean break and hold outside the range would change my mind.', noTradeReason: 'unclear_structure' } };
     assert.equal((await f.call('/scenario/commit', plan, user.cookie)).status, 201);
     assert.equal((await f.call('/scenario/commit', plan, user.cookie)).status, 200);
+    assert.equal((await f.streak(user)).current, 0, 'a no-trade decision counts once its reflection is saved (F28)');
+    assert.equal((await f.call('/scenario/reflection', { assignmentId: assigned.assignmentId, reflection: 'Waiting taught me that a clear level matters before risking anything.' }, user.cookie)).status, 201);
     const report = await f.streak(user);
     assert.equal(report.current, 1);
     assert.deepEqual(report.week.find(d => d.today).activities, ['challenge']);

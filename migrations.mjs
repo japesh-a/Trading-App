@@ -7,6 +7,7 @@ import { attemptMigration } from './scenario-attempt.mjs';
 import { coachMigration } from './daily-coach.mjs';
 import { journalMigration } from './journal.mjs';
 import { playbookMigration } from './playbook.mjs';
+import { noTradeMigration } from './no-trade.mjs';
 import { streakMigration } from './streak.mjs';
 const columns = (db, table) => db.prepare(`PRAGMA table_info(${table})`).all().map(column => column.name);
 
@@ -69,6 +70,7 @@ export const migrations = [
   { version: 9, name: 'streak activity events', up: streakMigration },
   { version: 10, name: 'structured journal entries', up: journalMigration },
   { version: 11, name: 'personal rules playbook', up: playbookMigration },
+  { version: 12, name: 'no-trade reflections', up: noTradeMigration },
 ];
 
 export const latestVersion = migrations.at(-1).version;

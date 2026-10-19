@@ -9,6 +9,7 @@ import { recordGraduation, masteryReport } from './mastery.mjs';
 import { revisionSuggestions, revisionThreshold, checkPractice } from './revision.mjs';
 import { todaySession, answerItem } from './daily-coach.mjs';
 import { recordActivity, streakReport } from './streak.mjs';
+import { noTradeStatus, saveReflection } from './no-trade.mjs';
 import { createEntry, updateEntry, deleteEntry, listEntries, journalCsv } from './journal.mjs';
 import { PROMPTS, PROMPTS_VERSION, currentPlaybook, savePlaybook, buildCheck, recordCheck, findCheck } from './playbook.mjs';
 import { runMigrations } from './migrations.mjs';
@@ -362,9 +363,23 @@ export function createTradingService(db, options = {}) {
         if (!found) fail(404, 'That challenge is not assigned to you.');
         const { attempt, created, conflict } = commitAttempt({ db, assignment: found.assignment, scenario: found.scenario, body, playbookCheck: body.playbook === undefined ? null : buildCheck(db, session.account_id, body.playbook), now: clock() });
         if (conflict) return send({ error: 'Your decision is already locked in. Here is what you committed.', locked: true, ...replayView(attempt, found.scenario) }, 409);
-        // A committed decision always carries written reasoning, so it earns the day's streak whatever the outcome.
-        if (created) recordActivity(db, session.account_id, utcDay(clock()), 'challenge', found.assignment.public_id, clock());
-        return send({ created, locked: true, ...replayView(attempt, found.scenario) }, created ? 201 : 200);
+        // A committed trade decision always carries written reasoning, so it earns the day's streak whatever the outcome.
+        // A no-trade decision earns it once the required reflection is saved (F28).
+        if (created && attempt.commitment.decision !== 'none') recordActivity(db, session.account_id, utcDay(clock()), 'challenge', found.assignment.public_id, clock());
+        return send({ created, locked: true, ...replayView(attempt, found.scenario), noTrade: noTradeStatus(db, session.account_id, attempt, found.scenario) }, created ? 201 : 200);
+      }
+      if (route === '/scenario/reflection' && req.method === 'POST') {
+        if (!session.account_id) fail(401, 'Sign in to save your reflection.');
+        rateLimit(`scenario-reflection:${session.account_id}`, 30);
+        const body = await requestBody(req);
+        const attempt = findAttempt(db, session.account_id, body.assignmentId);
+        if (!attempt) fail(404, 'Commit your decision before reflecting on it.');
+        const found = findAssignedScenario(db, session.account_id, body.assignmentId, await scenarioPool());
+        if (!found) fail(503, 'This scenario version is no longer available.');
+        const { created } = saveReflection(db, session.account_id, attempt, found.scenario, body.reflection, clock());
+        // Streak credit is for the same UTC day as the challenge; a late reflection is saved but does not rewrite past days.
+        if (created && attempt.day === utcDay(clock())) recordActivity(db, session.account_id, attempt.day, 'challenge', found.assignment.public_id, clock());
+        return send({ created, noTrade: noTradeStatus(db, session.account_id, attempt, found.scenario) }, created ? 201 : 200);
       }
       // Replay is available only after the account's own commitment exists; before it, nothing is revealed.
       if (route === '/scenario/replay' && req.method === 'GET') {
@@ -374,7 +389,7 @@ export function createTradingService(db, options = {}) {
         if (!attempt) fail(404, 'Commit your decision to see the outcome.');
         const found = findAssignedScenario(db, session.account_id, assignmentId, await scenarioPool());
         if (!found) fail(503, 'This scenario version is no longer available to replay.');
-        return send(replayView(attempt, found.scenario));
+        return send({ ...replayView(attempt, found.scenario), noTrade: noTradeStatus(db, session.account_id, attempt, found.scenario) });
       }
       if (route === '/lessons' && req.method === 'GET') return send(publicLessons());
       if (route === '/profile' && req.method === 'POST') {

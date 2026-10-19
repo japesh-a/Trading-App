@@ -17,7 +17,7 @@ function make(id, family, difficulty, objective, seed, start, visible, outcome, 
   };
 }
 
-export const scenarios = [
+const base = [
   make('tp-steady-resume', 'trend_pullback', 'beginner', 'Identify where a pullback in an uptrend could be invalidated', 11, 100,
     [[20, 8], [8, -3], [4, 1]], [[12, 5]], 'win',
     note('An orderly pullback after a rise; the plan matters more than the result.', 'Higher highs before the pause and a shallow retracement.', 'The pause could also be the start of a reversal; a stop below the pullback low limits that risk.')),
@@ -55,3 +55,13 @@ export const scenarios = [
     [[10, 0.3], [8, -0.3], [8, 0.3], [6, -0.2]], [[12, 5]], 'ambiguous',
     note('Quiet conditions that later moved sharply; staying out was still reasonable on what was visible.', 'No setup or invalidation level in the visible bars.', 'The later move does not make the earlier decision unsound.'), 0.1)
 ];
+
+// F28: reviewed, scenario-specific criteria for recognising a well-reasoned decision to stay out. They use only
+// what is visible at the decision bar; the outcome bars never feed them. Scenarios without criteria offer no badge.
+const noTradeCriteria = {
+  'vu-whipsaw': { reasons: ['volatile_conditions', 'unclear_structure', 'poor_risk_reward'], evidenceTerms: ['wide', 'swings', 'whipsaw', 'volatile', 'alternating', 'ranges', 'stop'] },
+  'vu-sudden-bar': { reasons: ['volatile_conditions', 'poor_risk_reward', 'unclear_structure'], evidenceTerms: ['large', 'abnormal', 'sudden', 'spike', 'volatile', 'uneven', 'stop'] },
+  'nt-quiet': { reasons: ['unclear_structure', 'poor_risk_reward'], evidenceTerms: ['quiet', 'small', 'overlapping', 'compressed', 'sideways', 'level', 'chopping', 'range'] },
+  'nt-then-moves': { reasons: ['unclear_structure', 'poor_risk_reward'], evidenceTerms: ['quiet', 'small', 'overlapping', 'sideways', 'setup', 'invalidation', 'level', 'range'] }
+};
+export const scenarios = base.map(s => noTradeCriteria[s.id] ? { ...s, noTradeCriteria: noTradeCriteria[s.id] } : s);
