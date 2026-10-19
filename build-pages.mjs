@@ -16,7 +16,9 @@ for(const file of files){
   writeFileSync(path.join(output,file),content);
 }
 const source=readFileSync(path.join(root,'public','index.html'),'utf8');
+const banner='<div role="note" style="background:#fff3cd;color:#3d2e00;padding:6px 12px;font:14px system-ui;text-align:center">Guest demo: nothing here is saved to an account, and it is not the hosted pilot.</div>';
 const html=source
+ .replace('<body>','<body>'+banner)
  .replace('href="/style.css"', 'href="./style.css?v='+version+'"')
  .replace('src="/theme.js"', 'src="./theme.js?v='+version+'"')
  .replace('<script type="module" src="/app.js"></script>',

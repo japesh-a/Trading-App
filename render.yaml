@@ -1,0 +1,53 @@
+# Example Render blueprint for the pilot and staging services. It contains no secrets: set keys in the
+# provider dashboard. Nothing deploys until a person connects the repository. See docs/HOSTING.md.
+# A persistent disk needs a paid instance type on Render; the free tier has ephemeral files and idle suspension.
+# Leave auto-scaling and plan upgrades off so cost never rises without a person choosing it.
+services:
+  - type: web
+    name: wicklume-pilot
+    runtime: node
+    plan: starter
+    buildCommand: npm test
+    startCommand: node server.mjs
+    healthCheckPath: /healthz
+    autoDeploy: false
+    disk:
+      name: wicklume-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: WICKLUME_ENV
+        value: production
+      - key: WICKLUME_HOST
+        value: 0.0.0.0
+      - key: WICKLUME_DATA_DIR
+        value: /var/data
+      - key: WICKLUME_PERSISTENT_DISK
+        value: "true"
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+  - type: web
+    name: wicklume-staging
+    runtime: node
+    plan: starter
+    buildCommand: npm test
+    startCommand: node server.mjs
+    healthCheckPath: /healthz
+    autoDeploy: false
+    disk:
+      name: wicklume-staging-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: WICKLUME_ENV
+        value: staging
+      - key: WICKLUME_HOST
+        value: 0.0.0.0
+      - key: WICKLUME_DATA_DIR
+        value: /var/data
+      - key: WICKLUME_PERSISTENT_DISK
+        value: "true"
