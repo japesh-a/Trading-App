@@ -1,0 +1,67 @@
+// Versioned, forward-only schema migrations. Applied versions are recorded in
+// schema_migrations, so opening a database twice never repeats a step.
+// Never edit a shipped migration; add a new one at the end of the list.
+const columns = (db, table) => db.prepare(`PRAGMA table_info(${table})`).all().map(column => column.name);
+
+export const migrations = [
+  {
+    version: 1, name: 'baseline tables',
+    up: db => db.exec(`
+      CREATE TABLE IF NOT EXISTS progress (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS trading_sessions (id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, display_name TEXT NOT NULL, created INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS trading_learning (session_id TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS trading_challenges (day TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS trading_daily_results (session_id TEXT NOT NULL, day TEXT NOT NULL, trade_id TEXT UNIQUE NOT NULL, value TEXT NOT NULL, PRIMARY KEY(session_id, day));
+      CREATE TABLE IF NOT EXISTS trading_paper_positions (session_id TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS trading_paper_trades (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, value TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS trading_paper_by_session ON trading_paper_trades(session_id);
+      CREATE TABLE IF NOT EXISTS accounts (
+        id TEXT PRIMARY KEY, email TEXT UNIQUE NOT NULL, salt TEXT NOT NULL,
+        password_hash TEXT NOT NULL, session_id TEXT UNIQUE NOT NULL, created INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS account_logins (
+        token_hash TEXT PRIMARY KEY, account_id TEXT NOT NULL, expires INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS account_login_expiry ON account_logins(expires);
+      CREATE INDEX IF NOT EXISTS account_login_owner ON account_logins(account_id);
+      CREATE TABLE IF NOT EXISTS account_google_identities (
+        google_sub TEXT PRIMARY KEY, account_id TEXT UNIQUE NOT NULL
+      );
+    `),
+  },
+  {
+    version: 2, name: 'accounts.password_enabled',
+    up: db => {
+      if (!columns(db, 'accounts').includes('password_enabled'))
+        db.exec('ALTER TABLE accounts ADD COLUMN password_enabled INTEGER NOT NULL DEFAULT 1');
+    },
+  },
+  {
+    version: 3, name: 'case-insensitive unique email',
+    up: db => {
+      // Skipped (not failed) if an old database already holds case-variant duplicates;
+      // user data is never rewritten or dropped by a migration.
+      const duplicate = db.prepare('SELECT 1 FROM accounts GROUP BY lower(email) HAVING count(*) > 1 LIMIT 1').get();
+      if (!duplicate) db.exec('CREATE UNIQUE INDEX IF NOT EXISTS accounts_email_nocase ON accounts(lower(email))');
+    },
+  },
+];
+
+export const latestVersion = migrations.at(-1).version;
+
+export function runMigrations(db, list = migrations) {
+  db.exec('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied INTEGER NOT NULL)');
+  const done = new Set(db.prepare('SELECT version FROM schema_migrations').all().map(row => row.version));
+  const applied = [];
+  for (const migration of list) {
+    if (done.has(migration.version)) continue;
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      migration.up(db);
+      db.prepare('INSERT INTO schema_migrations(version,name,applied) VALUES(?,?,?)').run(migration.version, migration.name, Date.now());
+      db.exec('COMMIT');
+    } catch (error) { db.exec('ROLLBACK'); throw error; }
+    applied.push(migration.version);
+  }
+  return applied;
+}

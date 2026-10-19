@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { OAuth2Client } from 'google-auth-library';
+import { runMigrations } from './migrations.mjs';
 
 const derive = promisify(scrypt);
 const digest = value => createHash('sha256').update(value).digest('hex');
@@ -10,22 +11,7 @@ const cookieName = 'wicklume_account';
 // Account cookies never expose credentials to JavaScript. Anonymous bearer
 // sessions remain separate, so registering cannot claim another user's data.
 export function createAccountService(db, { env, clock, fail, requestBody, rateLimit, googleVerifier }) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS accounts (
-      id TEXT PRIMARY KEY, email TEXT UNIQUE NOT NULL, salt TEXT NOT NULL,
-      password_hash TEXT NOT NULL, session_id TEXT UNIQUE NOT NULL, created INTEGER NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS account_logins (
-      token_hash TEXT PRIMARY KEY, account_id TEXT NOT NULL, expires INTEGER NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS account_login_expiry ON account_logins(expires);
-    CREATE INDEX IF NOT EXISTS account_login_owner ON account_logins(account_id);
-    CREATE TABLE IF NOT EXISTS account_google_identities (
-      google_sub TEXT PRIMARY KEY, account_id TEXT UNIQUE NOT NULL
-    );
-  `);
-  if (!db.prepare('PRAGMA table_info(accounts)').all().some(column => column.name === 'password_enabled'))
-    db.exec('ALTER TABLE accounts ADD COLUMN password_enabled INTEGER NOT NULL DEFAULT 1');
+  runMigrations(db);
   const googleClientId = String(env.GOOGLE_CLIENT_ID || '').trim();
   const googleClient = googleClientId ? new OAuth2Client(googleClientId) : null;
   const verifyGoogle = googleVerifier || (async credential => (await googleClient.verifyIdToken({ idToken: credential, audience: googleClientId })).getPayload());

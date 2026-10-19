@@ -24,12 +24,21 @@ Plain Node.js 24+ ES modules, no framework. The only runtime dependency is `goog
 
 ## Database and migrations
 
-SQLite file at `WICKLUME_DB` (default `data/wicklume.db`; `:memory:` in tests). There is no migration tool. Tables are created with `CREATE TABLE IF NOT EXISTS` at startup in `trading-service.mjs` and `auth-service.mjs`. To change a schema:
+SQLite file at `WICKLUME_DB` (default `data/wicklume.db`; `:memory:` in tests). Schema changes are versioned migrations in `migrations.mjs`, applied at startup and recorded in `schema_migrations`. To change a schema:
 
-1. Add new tables with `CREATE TABLE IF NOT EXISTS`.
-2. Add columns with `ALTER TABLE ... ADD COLUMN` that tolerates already-existing columns (see `password_enabled` in `auth-service.mjs`), with a default so old rows stay valid.
-3. Never drop or rewrite user data in a startup step. Test an upgrade by creating a database with the old schema and opening it with the new code.
-4. Back up by copying the database file while the server is stopped.
+1. Append a new `{ version, name, up(db) }` entry. Never edit a shipped one. Each runs in a transaction and rolls back on failure.
+2. Keep migrations additive and tolerant (`IF NOT EXISTS`, check columns first, defaults on new columns). Never drop or rewrite user data. Old databases without `schema_migrations` are adopted by migration 1.
+3. Test an upgrade in `storage.test.mjs` by creating an old-schema database and opening it with the new code.
+
+Uniqueness is enforced in the database: one email per account (case-insensitive), one daily result per session and day, unique trade ids, one Google identity per account.
+
+### Backup and restore
+
+`npm run db:backup [-- file]` writes a consistent copy with `VACUUM INTO` (safe while the server runs; default `data/backups/`). `npm run db:restore -- <file>` (server stopped) checks integrity and required tables, keeps the current file as `*.before-restore-<time>`, swaps in the backup and re-runs migrations. Restoring preserves account IDs, quiz evidence, trades and streak history because they are in the same file. Restore drill: back up, change data, restore, confirm the data is back (automated in `storage.test.mjs`).
+
+### Hosting storage decision
+
+SQLite needs a persistent disk; never put it on an ephemeral filesystem. Set `WICKLUME_PERSISTENT_DISK=true` once it is on one (production start-up warns otherwise). A free-host plus external PostgreSQL option is not built: the services use the synchronous `node:sqlite` API and no PostgreSQL driver is installed, so it needs an async persistence layer and is left for a later change. Until then, use a host with a persistent volume and schedule `db:backup` off-box.
 
 ## Feature flags
 

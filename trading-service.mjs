@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createAccountService } from './auth-service.mjs';
+import { runMigrations } from './migrations.mjs';
 import { lessons, publicLessons, correctIndex } from './curriculum.mjs';
 import { previousDayChallenge, coinbaseCandles, coinbaseChartCandles, utcDay } from './public/market-data.js';
 import { TIMEFRAMES } from './public/timeframes.js';
@@ -67,15 +68,7 @@ export function createTradingService(db, options = {}) {
     finally { release(); if (locks.get(key) === current) locks.delete(key); }
   };
 
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS trading_sessions (id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, display_name TEXT NOT NULL, created INTEGER NOT NULL);
-    CREATE TABLE IF NOT EXISTS trading_learning (session_id TEXT PRIMARY KEY, value TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS trading_challenges (day TEXT PRIMARY KEY, value TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS trading_daily_results (session_id TEXT NOT NULL, day TEXT NOT NULL, trade_id TEXT UNIQUE NOT NULL, value TEXT NOT NULL, PRIMARY KEY(session_id, day));
-    CREATE TABLE IF NOT EXISTS trading_paper_positions (session_id TEXT PRIMARY KEY, value TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS trading_paper_trades (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, value TEXT NOT NULL);
-    CREATE INDEX IF NOT EXISTS trading_paper_by_session ON trading_paper_trades(session_id);
-  `);
+  runMigrations(db);
   const accounts = createAccountService(db, { env, clock, fail, requestBody, rateLimit, googleVerifier: options.googleVerifier });
   const sessionFor = req => {
     const account = accounts.resolve(req);
