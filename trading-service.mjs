@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createAccountService } from './auth-service.mjs';
 import { runMigrations } from './migrations.mjs';
+import { createAuditLog, mayRecordVerified } from './security.mjs';
 import { lessons, publicLessons, correctIndex } from './curriculum.mjs';
 import { previousDayChallenge, coinbaseCandles, coinbaseChartCandles, utcDay } from './public/market-data.js';
 import { TIMEFRAMES } from './public/timeframes.js';
@@ -69,6 +70,8 @@ export function createTradingService(db, options = {}) {
   };
 
   runMigrations(db);
+  const audit = createAuditLog(db, clock);
+  const verifiedFor = session => mayRecordVerified(session, env);
   const accounts = createAccountService(db, { env, clock, fail, requestBody, rateLimit, googleVerifier: options.googleVerifier });
   const sessionFor = req => {
     const account = accounts.resolve(req);
@@ -271,7 +274,12 @@ export function createTradingService(db, options = {}) {
 
   return async function handleTradingRequest(req, res, url) {
     if (!url.pathname.startsWith('/api/trading/')) return false;
+    const ctx = { route: url.pathname.slice('/api/trading'.length), session: null };
+    const ip = req.socket.remoteAddress || 'unknown';
     const send = (value, status = 200) => {
+      const sensitive = req.method === 'POST' && /^\/(auth\/|daily\/submit|paper\/|profile|session)/.test(ctx.route);
+      if (ctx.route && ((status >= 400 && status !== 404) || (sensitive && status < 400)))
+        audit(`${req.method} ${ctx.route}`, { accountId: ctx.session?.account_id ?? null, sessionId: ctx.session?.id ?? null, ip, detail: String(status) });
       res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
       res.end(value === null ? '' : JSON.stringify(value));
       return true;
@@ -280,20 +288,24 @@ export function createTradingService(db, options = {}) {
       const origin = req.headers.origin;
       const localOrigin = `${req.socket.encrypted ? 'https' : 'http'}://${req.headers.host}`;
       const hostedOrigin = env.NODE_ENV === 'production' ? `https://${req.headers.host}` : localOrigin;
-      if (origin && origin !== localOrigin && origin !== hostedOrigin && !allowedOrigins.has(origin)) fail(403, 'This website origin is not allowed.');
+      const originAllowed = origin === localOrigin || origin === hostedOrigin || allowedOrigins.has(origin);
+      if (origin && !originAllowed) fail(403, 'This website origin is not allowed.');
+      // Browsers label cross-site requests even when Origin is stripped; refuse state changes from them.
+      const fetchSite = req.headers['sec-fetch-site'];
+      if (fetchSite && !['same-origin', 'none'].includes(fetchSite) && !originAllowed && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) fail(403, 'Cross-site requests are not allowed.');
       if (origin) { res.setHeader('Access-Control-Allow-Origin', origin); res.setHeader('Vary', 'Origin'); }
       res.setHeader('Access-Control-Allow-Credentials', 'true');
       res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
       if (req.method === 'OPTIONS') return send(null, 204);
-      const route = url.pathname.slice('/api/trading'.length), ip = req.socket.remoteAddress || 'unknown';
+      const route = ctx.route;
       rateLimit(`ip:${ip}`, 240);
       if (await accounts.handle(req, res, route, send, ip)) return true;
       if (route === '/config' && req.method === 'GET') return send({
         dailyRanked: true, paperRanked: true, lessonGateVerified: false, paperTradingOpen: true,
         coach: Boolean(env.OPENAI_API_KEY && env.OPENAI_MODEL),
         markets: { BTC: true, US500: Boolean(env.TWELVE_DATA_API_KEY), XAUUSD: Boolean(env.TWELVE_DATA_API_KEY), GBPUSD: Boolean(env.TWELVE_DATA_API_KEY) },
-        accountType: 'email-google-and-guest', accounts: true, googleClientId: env.GOOGLE_CLIENT_ID || '', initialBalance: INITIAL_BALANCE,
+        accountType: 'email-google-and-guest', accounts: true, verifiedRequiresAccount: env.WICKLUME_ANONYMOUS_VERIFIED !== 'true', googleClientId: env.GOOGLE_CLIENT_ID || '', initialBalance: INITIAL_BALANCE,
         dailyRiskLimit: 100, execution: 'Educational simulation; no spread, fees, financing or margin. Stops may slip; candles use stop-first execution.',
         paperExecution: 'Quote polling with completed-candle reconciliation. Partial entry minutes and provider-history gaps cannot be reconstructed exactly.',
       });
@@ -304,6 +316,7 @@ export function createTradingService(db, options = {}) {
         return send({ token, displayName: name(body.displayName), accountType: 'anonymous-device-session' }, 201);
       }
       const session = sessionFor(req);
+      ctx.session = session;
       rateLimit(`session:${session.id}`, 180);
       if (route === '/lessons' && req.method === 'GET') return send(publicLessons());
       if (route === '/profile' && req.method === 'POST') {
@@ -339,6 +352,7 @@ export function createTradingService(db, options = {}) {
         return send({ ...challenge, submitted: Boolean(existing), tradeId: existing?.trade_id ?? null });
       }
       if (route === '/daily/submit' && req.method === 'POST') {
+        if (!verifiedFor(session)) fail(403, 'Sign in with an account to submit a verified daily result. Guest practice is not recorded.');
         const body = await requestBody(req);
         return await serial(session.id, async () => {
           const challenge = await getChallenge();
@@ -369,11 +383,12 @@ export function createTradingService(db, options = {}) {
       if (route === '/leaderboard' && req.method === 'GET') {
         const mode = url.searchParams.get('mode') || 'daily';
         if (!['daily', 'paper'].includes(mode)) fail(400, 'Choose the daily or paper leaderboard.');
+        const accountOnly = env.WICKLUME_ANONYMOUS_VERIFIED === 'true' ? '' : ' AND EXISTS(SELECT 1 FROM accounts a WHERE a.session_id=s.id)';
         const entries = mode === 'daily'
-          ? db.prepare('SELECT r.value, r.session_id, s.display_name FROM trading_daily_results r JOIN trading_sessions s ON s.id=r.session_id WHERE r.day=?').all(utcDay(clock())).map(row => {
+          ? db.prepare('SELECT r.value, r.session_id, s.display_name FROM trading_daily_results r JOIN trading_sessions s ON s.id=r.session_id WHERE r.day=?' + accountOnly).all(utcDay(clock())).map(row => {
             const trade = jsonParse(row.value); return { displayName: row.display_name, pnl: trade.pnl, realizedR: trade.realizedR, count: 1, isYou: row.session_id === session.id };
           })
-          : db.prepare('SELECT DISTINCT s.id, s.display_name FROM trading_sessions s JOIN trading_paper_trades p ON p.session_id=s.id').all().map(row => {
+          : db.prepare('SELECT DISTINCT s.id, s.display_name FROM trading_sessions s JOIN trading_paper_trades p ON p.session_id=s.id WHERE 1=1' + accountOnly).all().map(row => {
             const stats = summarizeTrades(paperTrades(row.id)); return { displayName: row.display_name, pnl: stats.netPnl, realizedR: stats.avgR, count: stats.count, winRate: stats.winRate, isYou: row.id === session.id };
           });
         entries.sort((a, b) => b.pnl - a.pnl || b.realizedR - a.realizedR);
@@ -393,7 +408,8 @@ export function createTradingService(db, options = {}) {
           const entryType = body.entryType || 'market';
           const order = { ...body.order, entry: entryType === 'market' ? quote.price : body.order?.entry };
           let trade = openTrade(order, { instrument: symbol, mode: 'paper', time: quote.time, reasoning: text(body.reasoning, 6000), balance, entryType, currentPrice: quote.price });
-          trade = { ...trade, ranked: true, serverVerified: true, source: quote.source, lastQuoteTime: quote.time };
+          const verified = verifiedFor(session);
+          trade = { ...trade, ranked: verified, serverVerified: verified, source: quote.source, lastQuoteTime: quote.time };
           if (!session.account_id) updateName(session, body.displayName);
           savePosition(session.id, trade);
           return send({ trade, balance, quote });
@@ -466,6 +482,7 @@ export function createTradingService(db, options = {}) {
       if (res.headersSent) return true;
       if (error instanceof ServiceError) return send({ error: error.message }, error.status);
       if (error instanceof RangeError) return send({ error: error.message }, 400);
+      if (/UNIQUE constraint/.test(String(error?.message))) return send({ error: 'This submission was already recorded.' }, 409);
       return send({ error: 'The trading service could not complete this request.' }, 500);
     }
   };

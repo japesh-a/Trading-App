@@ -45,6 +45,16 @@ export const migrations = [
       if (!duplicate) db.exec('CREATE UNIQUE INDEX IF NOT EXISTS accounts_email_nocase ON accounts(lower(email))');
     },
   },
+  {
+    version: 4, name: 'private audit log',
+    up: db => db.exec(`
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, event TEXT NOT NULL,
+        account_id TEXT, session_id TEXT, ip_hash TEXT, detail TEXT
+      );
+      CREATE INDEX IF NOT EXISTS audit_log_by_time ON audit_log(at);
+    `),
+  },
 ];
 
 export const latestVersion = migrations.at(-1).version;

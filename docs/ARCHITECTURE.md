@@ -56,3 +56,13 @@ See `.env.example` for every variable.
 ## Out of scope
 
 No real orders, deposits or broker credentials. No payments. No public profiles or messaging.
+
+## Security model (F05)
+
+- **Account-owned records** are always looked up by the session resolved from the cookie or bearer token on the server; request bodies never choose the owner.
+- **Verified results** (daily submissions, rankings) need a signed-in account. Guest sessions can practise on paper but their trades are `ranked:false, serverVerified:false` and never reach leaderboards. `WICKLUME_ANONYMOUS_VERIFIED=true` restores the old behaviour.
+- **Duplicate/concurrent submissions** are serialised per session and backed by database constraints (`PRIMARY KEY(session_id, day)`, unique `trade_id`); a constraint hit returns 409.
+- **CSRF**: JSON-only bodies, an origin allow-list, and refusal of cross-site `Sec-Fetch-Site` state changes; cookies are `HttpOnly; SameSite=Lax`.
+- **Headers**: CSP (Google sign-in allowed), COOP `same-origin-allow-popups`, HSTS in production, nosniff, frame denial (`security.mjs`).
+- **Audit log**: the `audit_log` table records rejected requests and sensitive actions with a hashed network id. No route reads it; inspect it with SQLite on the host.
+- **Legacy endpoints** `/api/progress|answer|decision` share one record for every visitor, so they return 410 in production (`WICKLUME_LEGACY_PROGRESS` overrides).

@@ -13,7 +13,7 @@ async function fixture(overrides = {}) {
   const challenge = { id: day + '-BTC-15m', day, marketDate: '2026-09-24', instrument: 'BTC', interval: 900,
     history: candles.slice(0, 48), future: candles.slice(48), source: 'Verified test provider', demo: false, selection: 'Fixed UTC session' };
   const db = new DatabaseSync(':memory:');
-  const env = overrides.env || {};
+  const env = { WICKLUME_ANONYMOUS_VERIFIED: 'true', ...(overrides.env || {}) };
   const service = createTradingService(db, {
     clock: () => now, env,
     challengeProvider: async () => challenge,
@@ -24,7 +24,7 @@ async function fixture(overrides = {}) {
       coachPayload = { headers: options.headers, ...JSON.parse(options.body) };
       return { ok: true, json: async () => ({ output: [{ type: 'message', content: [{ type: 'output_text', text: 'Review the invalidation level before the result.' }] }] }) };
     },
-    ...overrides,
+    ...overrides, env,
   });
   const server = http.createServer(async (req, res) => {
     if (!await service(req, res, new URL(req.url, 'http://localhost'))) { res.writeHead(404); res.end(); }

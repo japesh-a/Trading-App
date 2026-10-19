@@ -8,6 +8,7 @@ import { series } from './scenarios.mjs';
 import { runMigrations } from './migrations.mjs';
 import { createTradingService } from './trading-service.mjs';
 import { healthStatus } from './health.mjs';
+import { applySecurityHeaders, legacyProgressEnabled } from './security.mjs';
 const root=fileURLToPath(new URL('.',import.meta.url));
 const dataDir=process.env.WICKLUME_DATA_DIR||path.join(root,'data');
 const port=Number(process.env.WICKLUME_PORT||process.env.PORT)||5173;
@@ -22,12 +23,13 @@ const handleTradingRequest=createTradingService(db);
 const publicFiles=new Set(['index.html',...readdirSync(path.join(root,'public')).filter(file=>/\.(js|css|json|svg)$/.test(file))]);
 const clients=new Set();if(process.env.NODE_ENV!=='production')watch(path.join(root,'public'),()=>clients.forEach(client=>{try{client.write('data: reload\n\n')}catch{clients.delete(client)}}));
 http.createServer(async(req,res)=>{
- res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');res.setHeader('X-Frame-Options','DENY');
- const url=new URL(req.url,'http://localhost');const json=(value,status=200)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(value));};
+ applySecurityHeaders(res);
  if(process.env.NODE_ENV==='production')res.setHeader('Strict-Transport-Security','max-age=15552000');
+ const url=new URL(req.url,'http://localhost');const json=(value,status=200)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(value));};
  if(url.pathname==='/healthz'&&['GET','HEAD'].includes(req.method)){const report=healthStatus(db);res.setHeader('Cache-Control','no-store');return json(report,report.ok?200:503);}
  if(await handleTradingRequest(req,res,url))return;
  if(url.pathname==='/events'){res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache','Connection':'keep-alive'});res.write(': connected\n\n');clients.add(res);req.on('close',()=>clients.delete(res));return;}
+ if(['/api/progress','/api/answer','/api/decision'].includes(url.pathname)){if(!legacyProgressEnabled())return json({error:'This shared-progress endpoint is retired. Use /api/trading with a signed-in account or a device session.'},410);res.setHeader('Deprecation','true');}
  if(url.pathname==='/api/progress'&&req.method==='GET')return json(get());
  if(url.pathname==='/api/lessons'&&req.method==='GET')return json(publicLessons());
  if(url.pathname==='/api/scenario'){const id=Number(url.searchParams.get('id'));if(!Number.isInteger(id)||id<0||id>2)return json({error:'Invalid scenario'},400);return json({candles:series[id].slice(0,16)});}
