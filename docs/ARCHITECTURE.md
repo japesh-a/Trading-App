@@ -76,3 +76,7 @@ No real orders, deposits or broker credentials. No payments. No public profiles 
 ## Completion and mastery (F15)
 
 `mastery.mjs` defines the required curriculum (the first 21 lessons). `POST /answer` records a one-off `graduation` object in the learner's progress when all required lessons are complete; it is never cleared, so optional lessons added later do not relock the post-course daily review. `GET /api/trading/mastery` reports completion separately from first-answer accuracy, weak skills (under 75% with at least 5 answers) and recommended revision lessons. Accuracy is quiz evidence, not trading ability.
+
+## Streaks (F17)
+
+`streak.mjs` stores qualifying events in `activity_events` (migration 9) per account: `lesson_quiz` (a lesson's quiz finished), `coach_set` (both daily coach questions answered) and `challenge` (a daily challenge committed with its written reasoning). Days are UTC, several events on one day count once, and profit, accuracy and order count are ignored. `GET /api/trading/streak` (accounts only) returns current and best streak and the UTC week. Days already saved before migration 9 are kept as `legacy` events. Events are included in the data export and erased with the account.

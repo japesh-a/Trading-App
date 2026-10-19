@@ -8,6 +8,7 @@ import { loadScenarios, publishedPool } from './scenario-bank.mjs';
 import { recordGraduation, masteryReport } from './mastery.mjs';
 import { revisionSuggestions, revisionThreshold, checkPractice } from './revision.mjs';
 import { todaySession, answerItem } from './daily-coach.mjs';
+import { recordActivity, streakReport } from './streak.mjs';
 import { runMigrations } from './migrations.mjs';
 import { createAuditLog, mayRecordVerified } from './security.mjs';
 import { lessons, publicLessons, correctIndex } from './curriculum.mjs';
@@ -358,6 +359,8 @@ export function createTradingService(db, options = {}) {
         if (!found) fail(404, 'That challenge is not assigned to you.');
         const { attempt, created, conflict } = commitAttempt({ db, assignment: found.assignment, scenario: found.scenario, body, now: clock() });
         if (conflict) return send({ error: 'Your decision is already locked in. Here is what you committed.', locked: true, ...replayView(attempt, found.scenario) }, 409);
+        // A committed decision always carries written reasoning, so it earns the day's streak whatever the outcome.
+        if (created) recordActivity(db, session.account_id, utcDay(clock()), 'challenge', found.assignment.public_id, clock());
         return send({ created, locked: true, ...replayView(attempt, found.scenario) }, created ? 201 : 200);
       }
       // Replay is available only after the account's own commitment exists; before it, nothing is revealed.
@@ -394,6 +397,10 @@ export function createTradingService(db, options = {}) {
         if (!Number.isInteger(body.lesson) || body.lesson < 0 || body.lesson >= lessons.length || !Number.isInteger(body.question) || body.question < 0 || body.question >= lessons[body.lesson].questions.length || !Number.isInteger(body.answer) || body.answer < 0 || body.answer > 2) fail(400, 'Invalid practice answer.');
         return send(checkPractice(lessons, body.lesson, body.question, body.answer));
       }
+      if (route === '/streak' && req.method === 'GET') {
+        if (!session.account_id) fail(401, 'Sign in to keep a streak across devices.');
+        return send(streakReport(db, session.account_id, utcDay(clock())));
+      }
       if (route === '/coach/today' || route === '/coach/answer') {
         if (!session.account_id) fail(401, 'Sign in to use the daily coach.');
         const progress = getProgress(session.id);
@@ -404,7 +411,10 @@ export function createTradingService(db, options = {}) {
         if (route === '/coach/answer' && req.method === 'POST') {
           const body = await requestBody(req);
           const result = answerItem({ ...common, index: body.item, body });
-          return result.error ? send({ error: result.error }, result.status) : send(result.session);
+          if (result.error) return send({ error: result.error }, result.status);
+          // The streak needs the objective questions finished; the reflection stays optional.
+          if (result.session.items.filter(item => item.kind !== 'reflection').every(item => item.done)) recordActivity(db, session.account_id, common.day, 'coach_set', '', clock());
+          return send(result.session);
         }
       }
       if (route === '/journal' && req.method === 'GET') return send({ trades: [
@@ -426,6 +436,7 @@ export function createTradingService(db, options = {}) {
         const graduatedNow = completed && recordGraduation(progress, lessons, clock());
         const day = utcDay(clock()); if (!progress.days.includes(day)) progress.days.push(day);
         db.prepare('INSERT INTO trading_learning VALUES(?,?) ON CONFLICT(session_id) DO UPDATE SET value=excluded.value').run(session.id, JSON.stringify(progress));
+        if (completed && session.account_id) recordActivity(db, session.account_id, day, 'lesson_quiz', String(id), clock());
         return send({ correct, answer: expected, completed, graduatedNow, progress, explanation: `The correct answer is: ${lesson.questions[question][1]}. ${lesson.slides[Math.min(2, Math.floor(question / 4))][1]}` });
       }
       if (route === '/challenge' && req.method === 'GET') {
