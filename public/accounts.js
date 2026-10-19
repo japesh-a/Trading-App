@@ -110,6 +110,15 @@ export async function initializeAccounts() {
         <label>Confirm new password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label>
         <p class="muted">Use at least 12 characters. Changing your password signs out your other devices.</p><button class="btn" type="submit">Update password</button><p role="alert" class="error-message" id="password-error"></p></form></details>`}
         ${googleClientId && !account.googleLinked ? '<div class="google-account"><p>Link Google to sign in without a password next time.</p><div id="google-signin"></div></div>' : account.googleLinked ? '<p>Google sign in is linked to this account.</p>' : ''}
+        <details class="privacy-settings"><summary>Privacy</summary>
+          <p class="muted">Terms: <a href="privacy-placeholder.html" target="_blank" rel="noopener">terms and privacy notice (placeholder, not yet reviewed)</a>. Accepting the terms is separate from the choices below, which are all optional and off by default.</p>
+          <p id="privacy-terms"></p><button class="btn" type="button" id="privacy-accept">Accept current terms</button>
+          <label class="check"><input type="checkbox" id="privacy-ai"> Allow AI review of my practice trades (sends the trade and my written reasoning to an AI provider)</label>
+          <label class="check"><input type="checkbox" id="privacy-marketing"> Email me news about Wicklume</label>
+          <p class="muted">Turning a choice off stops future use straight away.</p>
+          <button class="btn" type="button" id="privacy-export">Download my data</button>
+          <button class="btn" type="button" id="privacy-delete">Delete my account</button>
+          <p role="status" class="error-message" id="privacy-status"></p></details>
         <button class="btn" id="sign-out">Sign out</button> <button class="link" id="sign-out-all">Sign out on every device</button><p class="error-message" role="alert" id="account-error"></p>`;
       content.querySelector('#account-email').textContent = `Signed in as ${account.email}`;
       content.querySelector('[name="displayName"]').value = account.displayName;
@@ -131,6 +140,41 @@ export async function initializeAccounts() {
         catch (error) { errorElement.textContent = error.message; submit.disabled = false; }
       };
       showGoogle(true);
+      const privacyCall = async (path, body) => {
+        const response = await fetch(config.apiBase + '/api/trading/privacy' + path, {
+          method: body ? 'POST' : 'GET', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+          body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(15000) });
+        const value = await response.json();
+        if (!response.ok) throw Error(value.error || 'Unable to reach privacy settings.');
+        return value;
+      };
+      const status = content.querySelector('#privacy-status');
+      const showPrivacy = settings => {
+        content.querySelector('#privacy-terms').textContent = settings.acceptedTermsVersion === settings.termsVersion
+          ? `You accepted the current terms (${settings.termsVersion}).` : 'You have not accepted the current terms yet.';
+        content.querySelector('#privacy-ai').checked = settings.aiProcessing;
+        content.querySelector('#privacy-marketing').checked = settings.marketing;
+        content.querySelector('#privacy-accept').disabled = settings.acceptedTermsVersion === settings.termsVersion;
+        content.querySelector('#privacy-accept').onclick = async () => { try { showPrivacy(await privacyCall('/terms', { version: settings.termsVersion })); } catch (error) { status.textContent = error.message; } };
+      };
+      privacyCall('').then(showPrivacy).catch(error => { status.textContent = error.message; });
+      for (const [id, key] of [['#privacy-ai', 'aiProcessing'], ['#privacy-marketing', 'marketing']])
+        content.querySelector(id).onchange = async event => {
+          try { showPrivacy(await privacyCall('/choices', { [key]: event.target.checked })); status.textContent = 'Saved.'; }
+          catch (error) { status.textContent = error.message; event.target.checked = !event.target.checked; }
+        };
+      content.querySelector('#privacy-export').onclick = async () => {
+        try {
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(new Blob([JSON.stringify(await privacyCall('/export'), null, 2)], { type: 'application/json' }));
+          link.download = 'wicklume-my-data.json'; link.click(); URL.revokeObjectURL(link.href);
+        } catch (error) { status.textContent = error.message; }
+      };
+      content.querySelector('#privacy-delete').onclick = async () => {
+        if (!window.confirm('Delete your account and all learning data saved to it? This cannot be undone.')) return;
+        try { await privacyCall('/delete', { confirm: 'DELETE' }); reload(); }
+        catch (error) { status.textContent = error.message; }
+      };
       content.querySelector('#sign-out').onclick = async event => {
         event.target.disabled = true;
         try { await call('logout', {}); reload(); }

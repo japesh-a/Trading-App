@@ -6,6 +6,7 @@ import { copyFileSync, existsSync, mkdirSync, renameSync, rmSync } from 'node:fs
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runMigrations } from './migrations.mjs';
+import { reapplyDeletions } from './privacy.mjs';
 
 const required = ['accounts', 'trading_sessions', 'trading_learning', 'trading_daily_results', 'trading_paper_trades'];
 
@@ -38,7 +39,7 @@ export function restoreDatabase(backupFile, target) {
   rmSync(target + '-shm', { force: true });
   renameSync(staging, target);
   const db = new DatabaseSync(target);
-  try { runMigrations(db); } finally { db.close(); }
+  try { runMigrations(db); reapplyDeletions(db); } finally { db.close(); }
   return { restored: target, previousCopy: kept };
 }
 

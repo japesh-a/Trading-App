@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createAccountService, googleClientIdProblem, passwordSignupEnabled } from './auth-service.mjs';
+import { handlePrivacy, aiAllowed } from './privacy.mjs';
 import { runMigrations } from './migrations.mjs';
 import { createAuditLog, mayRecordVerified } from './security.mjs';
 import { lessons, publicLessons, correctIndex } from './curriculum.mjs';
@@ -277,7 +278,7 @@ export function createTradingService(db, options = {}) {
     const ctx = { route: url.pathname.slice('/api/trading'.length), session: null };
     const ip = req.socket.remoteAddress || 'unknown';
     const send = (value, status = 200) => {
-      const sensitive = req.method === 'POST' && /^\/(auth\/|daily\/submit|paper\/|profile|session)/.test(ctx.route);
+      const sensitive = req.method === 'POST' && /^\/(auth\/|privacy|daily\/submit|paper\/|profile|session)/.test(ctx.route);
       if (ctx.route && ((status >= 400 && status !== 404) || (sensitive && status < 400)))
         audit(`${req.method} ${ctx.route}`, { accountId: ctx.session?.account_id ?? null, sessionId: ctx.session?.id ?? null, ip, detail: String(status) });
       res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
@@ -320,6 +321,10 @@ export function createTradingService(db, options = {}) {
       const session = sessionFor(req);
       ctx.session = session;
       rateLimit(`session:${session.id}`, 180);
+      if (route.startsWith('/privacy')) {
+        const reply = (value, status) => { if (value?.deleted) accounts.clearCookie(res); return send(value, status); };
+        if (await handlePrivacy({ db, route, req, session, send: reply, fail, requestBody, clock })) return true;
+      }
       if (route === '/lessons' && req.method === 'GET') return send(publicLessons());
       if (route === '/profile' && req.method === 'POST') {
         const body = await requestBody(req);
@@ -442,6 +447,7 @@ export function createTradingService(db, options = {}) {
       }
       if (route === '/coach' && req.method === 'POST') {
         if (!env.OPENAI_API_KEY || !env.OPENAI_MODEL) fail(503, 'The AI coach is not connected. Configure OPENAI_API_KEY and OPENAI_MODEL on the server.');
+        if (session.account_id && !aiAllowed(db, session.account_id)) fail(403, 'AI review is switched off for your account. Turn it on under Privacy in Account settings to send a trade to the AI provider.');
         rateLimit(`coach-minute:${session.id}`, 3);
         rateLimit(`coach-day:${session.id}:${utcDay(clock())}`, 12, 86400000);
         const body = await requestBody(req);

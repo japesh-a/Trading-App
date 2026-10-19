@@ -1,6 +1,7 @@
 // Versioned, forward-only schema migrations. Applied versions are recorded in
 // schema_migrations, so opening a database twice never repeats a step.
 // Never edit a shipped migration; add a new one at the end of the list.
+import { privacyMigration } from './privacy.mjs';
 const columns = (db, table) => db.prepare(`PRAGMA table_info(${table})`).all().map(column => column.name);
 
 export const migrations = [
@@ -55,6 +56,7 @@ export const migrations = [
       CREATE INDEX IF NOT EXISTS audit_log_by_time ON audit_log(at);
     `),
   },
+  { version: 5, name: 'privacy choices and deletion tombstones', up: privacyMigration },
 ];
 
 export const latestVersion = migrations.at(-1).version;

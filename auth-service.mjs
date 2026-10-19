@@ -58,6 +58,7 @@ export function createAccountService(db, { env, clock, fail, requestBody, rateLi
   const keyOptions = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
   return {
     resolve,
+    clearCookie: res => res.setHeader('Set-Cookie', cookie('', 0)),
     async handle(req, res, route, send, ip) {
       if (!route.startsWith('/auth/')) return false;
       if (route === '/auth/me' && req.method === 'GET') {
