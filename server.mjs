@@ -9,6 +9,8 @@ import { runMigrations } from './migrations.mjs';
 import { createTradingService } from './trading-service.mjs';
 import { runRetention, reapplyDeletions } from './privacy.mjs';
 import { healthStatus } from './health.mjs';
+import { purgeAnalytics, evaluateAlerts, dispatchAlerts } from './analytics.mjs';
+import { backupDatabase, pruneBackups } from './db-backup.mjs';
 import { applySecurityHeaders, legacyProgressEnabled } from './security.mjs';
 const root=fileURLToPath(new URL('.',import.meta.url));
 const dataDir=process.env.WICKLUME_DATA_DIR||path.join(root,'data');
@@ -19,7 +21,16 @@ const db=new DatabaseSync(process.env.WICKLUME_DB||path.join(dataDir,'wicklume.d
 if(process.env.NODE_ENV==='production'&&process.env.WICKLUME_PERSISTENT_DISK!=='true')console.warn('WICKLUME_PERSISTENT_DISK is not "true": the SQLite file is lost on ephemeral hosting. Mount a persistent disk or back up with db-backup.mjs.');
 runMigrations(db);
 reapplyDeletions(db);
-runRetention(db);setInterval(()=>runRetention(db),86400000).unref();
+const housekeeping=()=>{runRetention(db);purgeAnalytics(db);};
+housekeeping();setInterval(housekeeping,86400000).unref();
+// Operations (F24): optional daily backups, and alert checks that only leave this machine if WICKLUME_ALERT_WEBHOOK is set.
+const dbFile=process.env.WICKLUME_DB||path.join(dataDir,'wicklume.db');
+if(process.env.WICKLUME_AUTO_BACKUP==='true'){
+ const backupNow=()=>{try{backupDatabase(db,path.join(path.dirname(dbFile),'backups',`wicklume-${new Date().toISOString().replace(/[:.]/g,'-')}.db`));pruneBackups(path.join(path.dirname(dbFile),'backups'));}catch(error){console.error('Automatic backup failed:',error.message);}};
+ backupNow();setInterval(backupNow,86400000).unref();
+}
+const alertsSent=new Map();
+setInterval(()=>{try{const alerts=evaluateAlerts(db,Date.now(),process.env,healthStatus(db));if(alerts.length)console.warn('Wicklume alerts:',alerts.map(a=>a.message).join(' '));dispatchAlerts(alerts,{sent:alertsSent}).catch(()=>{});}catch(error){console.error('Alert check failed:',error.message);}},300000).unref();
 db.prepare('INSERT OR IGNORE INTO progress VALUES(1,?)').run(JSON.stringify({completed:[],challenges:[],attempts:0,correct:0,days:[]}));
 const get=()=>JSON.parse(db.prepare('SELECT value FROM progress WHERE id=1').get().value);
 const handleTradingRequest=createTradingService(db);

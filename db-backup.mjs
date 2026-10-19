@@ -2,19 +2,58 @@
 //   node db-backup.mjs backup [destination]      (safe while the server runs)
 //   node db-backup.mjs restore <backup-file>     (stop the server first)
 import { DatabaseSync } from 'node:sqlite';
-import { copyFileSync, existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runMigrations } from './migrations.mjs';
-import { reapplyDeletions } from './privacy.mjs';
+import { reapplyDeletions, retention } from './privacy.mjs';
+import { setMeta } from './analytics.mjs';
 
 const required = ['accounts', 'trading_sessions', 'trading_learning', 'trading_daily_results', 'trading_paper_trades'];
 
-export function backupDatabase(db, destination) {
+export function backupDatabase(db, destination, now = Date.now()) {
   mkdirSync(path.dirname(destination), { recursive: true });
   if (existsSync(destination)) throw Error('Backup destination already exists: ' + destination);
   db.prepare('VACUUM INTO ?').run(destination);
+  recordOpsMeta(db, 'last_backup', now);
   return destination;
+}
+
+/** Deletes backup files older than the retention window (privacy.mjs retention.backupDays) so deleted data ages out. */
+export function pruneBackups(dir, now = Date.now(), days = retention.backupDays) {
+  if (!existsSync(dir)) return [];
+  const removed = [];
+  for (const name of readdirSync(dir)) {
+    const file = path.join(dir, name);
+    if (/^wicklume-.*\.db$/.test(name) && now - statSync(file).mtimeMs > days * 86400000) { rmSync(file, { force: true }); removed.push(name); }
+  }
+  return removed;
+}
+
+// Lets /admin/ops and alerts know a backup exists. Best effort: an older database may not have the table yet.
+function recordOpsMeta(db, key, now) {
+  try { setMeta(db, key, now); } catch { /* ops_meta not migrated yet */ }
+}
+
+/**
+ * Restoration rehearsal: back up, restore into a scratch file and check the copy opens, passes integrity and
+ * holds the same accounts. The live database is only read. Records `last_rehearsal` on success.
+ */
+export function rehearseRestore(db, { now = Date.now(), dir = mkdtempSync(path.join(tmpdir(), 'wicklume-rehearsal-')) } = {}) {
+  const backup = path.join(dir, 'rehearsal-backup.db'), target = path.join(dir, 'rehearsal-restored.db');
+  try {
+    backupDatabase(db, backup, now);
+    restoreDatabase(backup, target);
+    const copy = new DatabaseSync(target, { readOnly: true });
+    try {
+      const count = handle => handle.prepare('SELECT COUNT(*) n FROM accounts').get().n;
+      const result = { ok: count(copy) === count(db), accounts: count(db), restoredAccounts: count(copy), schemaVersion: copy.prepare('SELECT MAX(version) v FROM schema_migrations').get().v };
+      if (!result.ok) throw Error(`Rehearsal mismatch: ${result.accounts} accounts live, ${result.restoredAccounts} restored.`);
+      recordOpsMeta(db, 'last_rehearsal', now);
+      return result;
+    } finally { copy.close(); }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
 // Checks a backup file is a healthy Wicklume database before it replaces live data.
@@ -51,7 +90,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const db = new DatabaseSync(dbPath);
     const out = argument || path.join(path.dirname(dbPath), 'backups', `wicklume-${new Date().toISOString().replace(/[:.]/g, '-')}.db`);
     console.log('Backup written to', backupDatabase(db, out));
+  } else if (command === 'rehearse') {
+    const db = new DatabaseSync(dbPath);
+    runMigrations(db);
+    console.log('Restore rehearsal passed:', rehearseRestore(db));
   } else if (command === 'restore' && argument) {
     console.log(restoreDatabase(argument, dbPath));
-  } else { console.error('Usage: node db-backup.mjs backup [file] | restore <file>'); process.exit(1); }
+  } else { console.error('Usage: node db-backup.mjs backup [file] | rehearse | restore <file>'); process.exit(1); }
 }

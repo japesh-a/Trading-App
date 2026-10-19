@@ -14,6 +14,8 @@ import { createEntry, updateEntry, deleteEntry, listEntries, journalCsv } from '
 import { PROMPTS, PROMPTS_VERSION, currentPlaybook, savePlaybook, buildCheck, recordCheck, findCheck } from './playbook.mjs';
 import { handleAdmin, scenarioSources, fileReport, myReports, supportAccessView, createGrant, revokeGrants } from './admin.mjs';
 import { runMigrations } from './migrations.mjs';
+import { healthStatus } from './health.mjs';
+import { recordEvent, recordOps, FAILURE_KINDS, analyticsSettings, setAnalyticsConsent, serviceStatus } from './analytics.mjs';
 import { createAuditLog, mayRecordVerified } from './security.mjs';
 import { lessons, publicLessons, correctIndex } from './curriculum.mjs';
 import { previousDayChallenge, coinbaseCandles, coinbaseChartCandles, utcDay } from './public/market-data.js';
@@ -92,6 +94,10 @@ export function createTradingService(db, options = {}) {
 
   runMigrations(db);
   const audit = createAuditLog(db, clock);
+  // Analytics must never break a request: product events need consent, operational counters are anonymous.
+  const track = (accountId, name) => { try { return recordEvent(db, accountId, name, clock()); } catch { return false; /* analytics is best effort */ } };
+  const countOps = (kind, amount) => { try { recordOps(db, kind, clock(), amount); } catch { /* best effort */ } };
+  const visitedToday = new Set();
   const verifiedFor = session => mayRecordVerified(session, env);
   const accounts = createAccountService(db, { env, clock, fail, requestBody, rateLimit, googleVerifier: options.googleVerifier });
   const sessionFor = req => {
@@ -305,6 +311,7 @@ export function createTradingService(db, options = {}) {
       const sensitive = req.method === 'POST' && /^\/(auth\/|privacy|daily\/submit|paper\/|profile|session)/.test(ctx.route);
       if (ctx.route && ((status >= 400 && status !== 404) || (sensitive && status < 400)))
         audit(`${req.method} ${ctx.route}`, { accountId: ctx.session?.account_id ?? null, sessionId: ctx.session?.id ?? null, ip, detail: String(status) });
+      if (status >= 500) countOps('api_5xx');
       res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
       res.end(value === null ? '' : JSON.stringify(value));
       return true;
@@ -343,10 +350,32 @@ export function createTradingService(db, options = {}) {
         db.prepare('INSERT INTO trading_sessions VALUES(?,?,?,?)').run(id, hash(token), name(body.displayName), clock());
         return send({ token, displayName: name(body.displayName), accountType: 'anonymous-device-session' }, 201);
       }
+      if (route === '/status' && req.method === 'GET') return send(serviceStatus(env, healthStatus(db, env)));
+      if (route === '/analytics/failure' && req.method === 'POST') {
+        rateLimit(`failure-report:${ip}`, 30, 3600000);
+        const body = await requestBody(req);
+        if (!FAILURE_KINDS.includes(body.kind)) fail(400, 'Unknown failure kind.');
+        countOps(body.kind);
+        return send({ recorded: true }, 202);
+      }
       if (route.startsWith('/admin')) return await handleAdmin({ db, route, req, send, fail, requestBody, clock, env, ip, rateLimit, sources: adminSources(), questions: options.questionBank });
       const session = sessionFor(req);
       ctx.session = session;
       rateLimit(`session:${session.id}`, 180);
+      if (session.account_id) {
+        const visit = `${session.account_id}:${utcDay(clock())}`;
+        // Remembered only once counted, so opting in later the same day still records that day's visit.
+        if (!visitedToday.has(visit) && track(session.account_id, 'return_visit')) { if (visitedToday.size > 5000) visitedToday.clear(); visitedToday.add(visit); }
+      }
+      if (route === '/analytics/consent') {
+        if (!session.account_id) fail(401, 'Sign in to manage analytics. Guests are never measured.');
+        if (req.method === 'GET') return send(analyticsSettings(db, session.account_id));
+        if (req.method === 'POST') {
+          const body = await requestBody(req);
+          if (typeof body.enabled !== 'boolean') fail(400, 'Send enabled as true or false.');
+          return send(setAnalyticsConsent(db, session.account_id, body.enabled, clock()));
+        }
+      }
       if (route.startsWith('/privacy')) {
         const reply = (value, status) => { if (value?.deleted) accounts.clearCookie(res); return send(value, status); };
         if (await handlePrivacy({ db, route, req, session, send: reply, fail, requestBody, clock })) return true;
@@ -424,6 +453,7 @@ export function createTradingService(db, options = {}) {
         const progress = getProgress(session.id);
         // Backfill for learners who finished before graduation was recorded.
         if (recordGraduation(progress, lessons, clock())) db.prepare('INSERT INTO trading_learning VALUES(?,?) ON CONFLICT(session_id) DO UPDATE SET value=excluded.value').run(session.id, JSON.stringify(progress));
+        if (session.account_id && progress.graduation) track(session.account_id, 'course_completed');
         return send(masteryReport(progress, lessons));
       }
       if (route === '/revision' && req.method === 'GET') {
@@ -445,6 +475,7 @@ export function createTradingService(db, options = {}) {
         const progress = getProgress(session.id);
         if (recordGraduation(progress, lessons, clock())) db.prepare('INSERT INTO trading_learning VALUES(?,?) ON CONFLICT(session_id) DO UPDATE SET value=excluded.value').run(session.id, JSON.stringify(progress));
         if (!progress.graduation) fail(403, 'The daily coach unlocks when you finish the course.');
+        track(session.account_id, 'course_completed');
         const common = { db, accountId: session.account_id, day: utcDay(clock()), course: lessons, now: clock() };
         if (route === '/coach/today' && req.method === 'GET') return send(todaySession({ ...common, progress }));
         if (route === '/coach/answer' && req.method === 'POST') {
@@ -453,6 +484,7 @@ export function createTradingService(db, options = {}) {
           if (result.error) return send({ error: result.error }, result.status);
           // The streak needs the objective questions finished; the reflection stays optional.
           if (result.session.items.filter(item => item.kind !== 'reflection').every(item => item.done)) recordActivity(db, session.account_id, common.day, 'coach_set', '', clock());
+          if (result.session.items.filter(item => item.kind !== 'reflection').every(item => item.done)) track(session.account_id, 'daily_review_completed');
           return send(result.session);
         }
       }
@@ -485,13 +517,15 @@ export function createTradingService(db, options = {}) {
         if (route === '/journal/entries' && req.method === 'POST') {
           const body = await requestBody(req, JOURNAL_BODY_LIMIT);
           const paperTrade = body.kind === 'paper' ? paperTrades(session.id).find(t => t.id === body.tradeId && t.status === 'closed') ?? null : null;
-          return send({ entry: createEntry(db, session.account_id, body, { paperTrade, now: clock() }) }, 201);
+          const entry = createEntry(db, session.account_id, body, { paperTrade, now: clock() });
+          if (String(entry.notes?.reflection || '').trim()) track(session.account_id, 'journal_reflection');
+          return send({ entry }, 201);
         }
         if (route === '/journal/entries/update' && req.method === 'POST') {
           const result = updateEntry(db, session.account_id, await requestBody(req, JOURNAL_BODY_LIMIT), clock());
           return result.conflict
             ? send({ error: 'This entry was changed on another device. Review the latest version, then save again.', current: result.current, differing: result.differing }, 409)
-            : send({ entry: result.entry });
+            : (String(result.entry.notes?.reflection || '').trim() && track(session.account_id, 'journal_reflection'), send({ entry: result.entry }));
         }
         if (route === '/journal/entries/delete' && req.method === 'POST') {
           const body = await requestBody(req);
@@ -640,6 +674,7 @@ export function createTradingService(db, options = {}) {
           realizedR: trade.realizedR, reasoning: trade.reasoning, serverVerified: Boolean(trade.serverVerified),
         } });
         let response;
+        countOps('ai_call');
         try {
           response = await fetchImpl('https://api.openai.com/v1/responses', {
             method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OPENAI_API_KEY}` }, signal: AbortSignal.timeout(30000),
@@ -648,9 +683,11 @@ export function createTradingService(db, options = {}) {
               input, tools: [],
             }),
           });
-        } catch { fail(503, 'The AI coach connection timed out. Please try again later.'); }
-        if (!response.ok) fail(503, 'The AI coach is unavailable. Check the server model access and account configuration.');
+        } catch { countOps('ai_failure'); fail(503, 'The AI coach connection timed out. Please try again later.'); }
+        if (!response.ok) { countOps('ai_failure'); fail(503, 'The AI coach is unavailable. Check the server model access and account configuration.'); }
         const value = await response.json();
+        // Cost tracking: the provider's token count when given, else a rough estimate. Counts only, no content.
+        countOps('ai_tokens', Number(value.usage?.total_tokens) || Math.ceil((input.length + JSON.stringify(value.output ?? '').length) / 4));
         const responseText = (value.output || []).flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('\n').trim();
         if (!responseText) fail(503, 'The AI coach did not return a review. Please try again.');
         return send({ text: responseText, review: responseText, provider: 'OpenAI', serverVerified: Boolean(trade.serverVerified) });

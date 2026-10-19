@@ -9,6 +9,7 @@ import { erasePlaybook, exportPlaybook } from './playbook.mjs';
 import { exportActivity } from './streak.mjs';
 import { eraseNoTrade, exportNoTrade } from './no-trade.mjs';
 import { eraseAdminData, myReports } from './admin.mjs';
+import { eraseAnalytics, exportAnalytics } from './analytics.mjs';
 
 export const TERMS_VERSION = '2026-10-draft';
 export const retention = {
@@ -51,6 +52,7 @@ export function eraseAccount(db, accountId) {
     erasePlaybook(db, accountId);
     eraseNoTrade(db, accountId);
     eraseAdminData(db, accountId);
+    eraseAnalytics(db, accountId);
     db.prepare('DELETE FROM activity_events WHERE account_id=?').run(accountId);
     db.prepare('DELETE FROM scenario_assignments WHERE account_id=?').run(accountId);
     db.prepare('UPDATE audit_log SET account_id=NULL WHERE account_id=?').run(accountId);
@@ -115,6 +117,7 @@ export function exportAccount(db, session, now) {
     playbook: exportPlaybook(db, session.account_id),
     noTradeReflections: exportNoTrade(db, session.account_id),
     problemReports: myReports(db, session.account_id),
+    analytics: exportAnalytics(db, session.account_id),
     activityHistory: exportActivity(db, session.account_id),
     note: 'Passwords, session tokens and security logs are not included.',
   };

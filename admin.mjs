@@ -10,6 +10,8 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import questionBank from './question-bank.json' with { type: 'json' };
 import { approvalProblems, contentHash, recordReview, validateScenario } from './scenario-bank.mjs';
 import { listEntries } from './journal.mjs';
+import { healthStatus } from './health.mjs';
+import { analyticsSummary, evaluateAlerts, getMeta, serviceStatus, thresholds } from './analytics.mjs';
 
 export const ROLES = ['content', 'support'];
 export const REPORT_KINDS = ['scenario_problem', 'lesson_problem', 'bug', 'other'];
@@ -310,6 +312,14 @@ export async function handleAdmin({ db, route, req, send, fail, requestBody, clo
     db.prepare('INSERT INTO support_access_log(grant_id,account_id,at,staff,reason,entries) VALUES(?,?,?,?,?,?)').run(grant.id, grant.account_id, clock(), staff.name, reason, entries.length);
     act('support.journal', grant.id, reason);
     return send({ entries });
+  }
+  if (route === '/admin/analytics' && req.method === 'GET')
+    return send(analyticsSummary(db, clock(), Math.min(90, Math.max(1, Number(query.get('days')) || 7))));
+  if (route === '/admin/ops' && req.method === 'GET') {
+    const health = healthStatus(db, env), age = key => { const m = getMeta(db, key); return m ? m.updated : null; };
+    return send({ health: { status: health.status, database: health.database, schemaVersion: health.schemaVersion, persistentDisk: health.persistentDisk },
+      service: serviceStatus(env, health), alerts: evaluateAlerts(db, clock(), env, health), thresholds: thresholds(env),
+      lastBackup: age('last_backup'), lastRestoreRehearsal: age('last_rehearsal'), alertWebhookConfigured: /^https:\/\//.test(String(env.WICKLUME_ALERT_WEBHOOK || '')) });
   }
   if (route === '/admin/actions' && req.method === 'GET')
     return send({ actions: db.prepare('SELECT at, staff, role, action, target, detail FROM admin_actions ORDER BY id DESC LIMIT 100').all() });

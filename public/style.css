@@ -865,3 +865,5 @@ label, .form-field { display: block; }
   button, .btn, .chart-tools button, .chart-toolbar > button, .chart-toolbar select, .timeframe-tabs button, .side-toggle button,
   .market-tabs button, .scenario-tabs button, .view-tabs button, input, select, summary { min-height: 44px; min-width: 44px; }
 }
+
+.service-banner { margin: 0; padding: 10px 16px; background: var(--panel); color: var(--text); border-bottom: 2px solid var(--muted); font-size: 14px; text-align: center; }

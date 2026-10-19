@@ -10,6 +10,7 @@ import { playbookMigration } from './playbook.mjs';
 import { noTradeMigration } from './no-trade.mjs';
 import { adminMigration } from './admin.mjs';
 import { streakMigration } from './streak.mjs';
+import { analyticsMigration } from './analytics.mjs';
 const columns = (db, table) => db.prepare(`PRAGMA table_info(${table})`).all().map(column => column.name);
 
 export const migrations = [
@@ -73,6 +74,7 @@ export const migrations = [
   { version: 11, name: 'personal rules playbook', up: playbookMigration },
   { version: 12, name: 'no-trade reflections', up: noTradeMigration },
   { version: 13, name: 'administration, reports and support access', up: adminMigration },
+  { version: 14, name: 'privacy-conscious analytics and operations counters', up: analyticsMigration },
 ];
 
 export const latestVersion = migrations.at(-1).version;

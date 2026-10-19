@@ -115,6 +115,7 @@ export async function initializeAccounts() {
           <p id="privacy-terms"></p><button class="btn" type="button" id="privacy-accept">Accept current terms</button>
           <label class="check"><input type="checkbox" id="privacy-ai"> Allow AI review of my practice trades (sends the trade and my written reasoning to an AI provider)</label>
           <label class="check"><input type="checkbox" id="privacy-marketing"> Email me news about Wicklume</label>
+          <label class="check"><input type="checkbox" id="privacy-analytics"> Share anonymous usage counts to help improve Wicklume (that a lesson set or review was finished, never your answers or journal text; no ads or tracking)</label>
           <p class="muted">Turning a choice off stops future use straight away.</p>
           <button class="btn" type="button" id="privacy-export">Download my data</button>
           <button class="btn" type="button" id="privacy-delete">Delete my account</button>
@@ -163,6 +164,19 @@ export async function initializeAccounts() {
           try { showPrivacy(await privacyCall('/choices', { [key]: event.target.checked })); status.textContent = 'Saved.'; }
           catch (error) { status.textContent = error.message; event.target.checked = !event.target.checked; }
         };
+      const analyticsBox = content.querySelector('#privacy-analytics');
+      const analyticsCall = async body => {
+        const response = await fetch(config.apiBase + '/api/trading/analytics/consent', { method: body ? 'POST' : 'GET', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+          body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(15000) });
+        const value = await response.json();
+        if (!response.ok) throw Error(value.error || 'Unable to reach analytics settings.');
+        return value;
+      };
+      analyticsCall().then(value => { analyticsBox.checked = value.enabled; }).catch(() => {});
+      analyticsBox.onchange = async event => {
+        try { await analyticsCall({ enabled: event.target.checked }); status.textContent = 'Saved.'; }
+        catch (error) { status.textContent = error.message; event.target.checked = !event.target.checked; }
+      };
       content.querySelector('#privacy-export').onclick = async () => {
         try {
           const link = document.createElement('a');
