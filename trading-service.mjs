@@ -1,7 +1,8 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createAccountService, googleClientIdProblem, passwordSignupEnabled } from './auth-service.mjs';
 import { handlePrivacy, aiAllowed } from './privacy.mjs';
-import { allocateScenario, assignmentView } from './scenario-allocation.mjs';
+import { allocateScenario, assignmentView, findAssignedScenario } from './scenario-allocation.mjs';
+import { commitAttempt, findAttempt, replayView } from './scenario-attempt.mjs';
 import { availableTimeframes } from './scenario-index.mjs';
 import { loadScenarios, publishedPool } from './scenario-bank.mjs';
 import { runMigrations } from './migrations.mjs';
@@ -345,6 +346,26 @@ export function createTradingService(db, options = {}) {
         const tf = url.searchParams.get('timeframe') || undefined;
         if (tf && !availableTimeframes(scenario).includes(tf)) fail(400, 'Timeframe not available for this challenge.');
         return send(assignmentView(assignment, scenario, tf));
+      }
+      if (route === '/scenario/commit' && req.method === 'POST') {
+        if (!session.account_id) fail(401, 'Sign in to commit your daily decision.');
+        rateLimit(`scenario-commit:${session.account_id}`, 30);
+        const body = await requestBody(req);
+        const found = findAssignedScenario(db, session.account_id, body.assignmentId, await scenarioPool());
+        if (!found) fail(404, 'That challenge is not assigned to you.');
+        const { attempt, created, conflict } = commitAttempt({ db, assignment: found.assignment, scenario: found.scenario, body, now: clock() });
+        if (conflict) return send({ error: 'Your decision is already locked in. Here is what you committed.', locked: true, ...replayView(attempt, found.scenario) }, 409);
+        return send({ created, locked: true, ...replayView(attempt, found.scenario) }, created ? 201 : 200);
+      }
+      // Replay is available only after the account's own commitment exists; before it, nothing is revealed.
+      if (route === '/scenario/replay' && req.method === 'GET') {
+        if (!session.account_id) fail(401, 'Sign in to replay your daily decision.');
+        const assignmentId = url.searchParams.get('assignmentId');
+        const attempt = findAttempt(db, session.account_id, assignmentId);
+        if (!attempt) fail(404, 'Commit your decision to see the outcome.');
+        const found = findAssignedScenario(db, session.account_id, assignmentId, await scenarioPool());
+        if (!found) fail(503, 'This scenario version is no longer available to replay.');
+        return send(replayView(attempt, found.scenario));
       }
       if (route === '/lessons' && req.method === 'GET') return send(publicLessons());
       if (route === '/profile' && req.method === 'POST') {

@@ -3,6 +3,7 @@
 // Never edit a shipped migration; add a new one at the end of the list.
 import { privacyMigration } from './privacy.mjs';
 import { allocationMigration } from './scenario-allocation.mjs';
+import { attemptMigration } from './scenario-attempt.mjs';
 const columns = (db, table) => db.prepare(`PRAGMA table_info(${table})`).all().map(column => column.name);
 
 export const migrations = [
@@ -59,6 +60,7 @@ export const migrations = [
   },
   { version: 5, name: 'privacy choices and deletion tombstones', up: privacyMigration },
   { version: 6, name: 'daily scenario assignments', up: allocationMigration },
+  { version: 7, name: 'daily scenario attempts', up: attemptMigration },
 ];
 
 export const latestVersion = migrations.at(-1).version;

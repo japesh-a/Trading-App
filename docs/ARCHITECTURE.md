@@ -68,3 +68,7 @@ No real orders, deposits or broker credentials. No payments. No public profiles 
 - **Headers**: CSP (Google sign-in allowed), COOP `same-origin-allow-popups`, HSTS in production, nosniff, frame denial (`security.mjs`).
 - **Audit log**: the `audit_log` table records rejected requests and sensitive actions with a hashed network id. No route reads it; inspect it with SQLite on the host.
 - **Legacy endpoints** `/api/progress|answer|decision` share one record for every visitor, so they return 410 in production (`WICKLUME_LEGACY_PROGRESS` overrides).
+
+## Daily challenge commitment (F14)
+
+`scenario-attempt.mjs` handles `POST /api/trading/scenario/commit` and `GET /api/trading/scenario/replay`. One attempt per account per day is stored in `scenario_attempts` (migration 7); a retry returns the saved result, and a different payload gets 409 with the locked commitment. Scoring is deterministic (`rubric-1`, `fill-1`): rule adherence, risk calculation and reasoning are scored separately, and profit/loss is shown in R and % but never feeds a score or ranking. A well-reasoned No trade completes the day and earns learning credit. The optional checklist (F27) is stored with the attempt; `noTradeRecognised` is a simple F28 stand-in. Concealment reduces answer lookup; it does not guarantee cheat prevention.
