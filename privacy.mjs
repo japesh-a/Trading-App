@@ -3,6 +3,7 @@
 // the optional marketing / AI choices, which are off until the learner turns them on.
 import { createHash } from 'node:crypto';
 import { exportAttempts } from './scenario-attempt.mjs';
+import { exportCoach } from './daily-coach.mjs';
 
 export const TERMS_VERSION = '2026-10-draft';
 export const retention = {
@@ -40,6 +41,7 @@ export function eraseAccount(db, accountId) {
     db.prepare('DELETE FROM account_google_identities WHERE account_id=?').run(accountId);
     db.prepare('DELETE FROM account_privacy WHERE account_id=?').run(accountId);
     db.prepare('DELETE FROM scenario_attempts WHERE account_id=?').run(accountId);
+    db.prepare('DELETE FROM daily_coach_sessions WHERE account_id=?').run(accountId);
     db.prepare('DELETE FROM scenario_assignments WHERE account_id=?').run(accountId);
     db.prepare('UPDATE audit_log SET account_id=NULL WHERE account_id=?').run(accountId);
     db.prepare('DELETE FROM accounts WHERE id=?').run(accountId);
@@ -98,6 +100,7 @@ export function exportAccount(db, session, now) {
     openPaperPosition: rows('trading_paper_positions'),
     scenarioAssignments: db.prepare('SELECT day,difficulty FROM scenario_assignments WHERE account_id=? ORDER BY day').all(session.account_id),
     scenarioAttempts: exportAttempts(db, session.account_id),
+    dailyCoach: exportCoach(db, session.account_id),
     note: 'Passwords, session tokens and security logs are not included.',
   };
 }

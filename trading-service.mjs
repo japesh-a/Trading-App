@@ -7,6 +7,7 @@ import { availableTimeframes } from './scenario-index.mjs';
 import { loadScenarios, publishedPool } from './scenario-bank.mjs';
 import { recordGraduation, masteryReport } from './mastery.mjs';
 import { revisionSuggestions, revisionThreshold, checkPractice } from './revision.mjs';
+import { todaySession, answerItem } from './daily-coach.mjs';
 import { runMigrations } from './migrations.mjs';
 import { createAuditLog, mayRecordVerified } from './security.mjs';
 import { lessons, publicLessons, correctIndex } from './curriculum.mjs';
@@ -392,6 +393,19 @@ export function createTradingService(db, options = {}) {
         const body = await requestBody(req);
         if (!Number.isInteger(body.lesson) || body.lesson < 0 || body.lesson >= lessons.length || !Number.isInteger(body.question) || body.question < 0 || body.question >= lessons[body.lesson].questions.length || !Number.isInteger(body.answer) || body.answer < 0 || body.answer > 2) fail(400, 'Invalid practice answer.');
         return send(checkPractice(lessons, body.lesson, body.question, body.answer));
+      }
+      if (route === '/coach/today' || route === '/coach/answer') {
+        if (!session.account_id) fail(401, 'Sign in to use the daily coach.');
+        const progress = getProgress(session.id);
+        if (recordGraduation(progress, lessons, clock())) db.prepare('INSERT INTO trading_learning VALUES(?,?) ON CONFLICT(session_id) DO UPDATE SET value=excluded.value').run(session.id, JSON.stringify(progress));
+        if (!progress.graduation) fail(403, 'The daily coach unlocks when you finish the course.');
+        const common = { db, accountId: session.account_id, day: utcDay(clock()), course: lessons, now: clock() };
+        if (route === '/coach/today' && req.method === 'GET') return send(todaySession({ ...common, progress }));
+        if (route === '/coach/answer' && req.method === 'POST') {
+          const body = await requestBody(req);
+          const result = answerItem({ ...common, index: body.item, body });
+          return result.error ? send({ error: result.error }, result.status) : send(result.session);
+        }
       }
       if (route === '/journal' && req.method === 'GET') return send({ trades: [
         ...paperTrades(session.id),
