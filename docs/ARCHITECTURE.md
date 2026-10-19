@@ -72,3 +72,7 @@ No real orders, deposits or broker credentials. No payments. No public profiles 
 ## Daily challenge commitment (F14)
 
 `scenario-attempt.mjs` handles `POST /api/trading/scenario/commit` and `GET /api/trading/scenario/replay`. One attempt per account per day is stored in `scenario_attempts` (migration 7); a retry returns the saved result, and a different payload gets 409 with the locked commitment. Scoring is deterministic (`rubric-1`, `fill-1`): rule adherence, risk calculation and reasoning are scored separately, and profit/loss is shown in R and % but never feeds a score or ranking. A well-reasoned No trade completes the day and earns learning credit. The optional checklist (F27) is stored with the attempt; `noTradeRecognised` is a simple F28 stand-in. Concealment reduces answer lookup; it does not guarantee cheat prevention.
+
+## Completion and mastery (F15)
+
+`mastery.mjs` defines the required curriculum (the first 21 lessons). `POST /answer` records a one-off `graduation` object in the learner's progress when all required lessons are complete; it is never cleared, so optional lessons added later do not relock the post-course daily review. `GET /api/trading/mastery` reports completion separately from first-answer accuracy, weak skills (under 75% with at least 5 answers) and recommended revision lessons. Accuracy is quiz evidence, not trading ability.

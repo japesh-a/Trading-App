@@ -5,6 +5,7 @@ import { allocateScenario, assignmentView, findAssignedScenario } from './scenar
 import { commitAttempt, findAttempt, replayView } from './scenario-attempt.mjs';
 import { availableTimeframes } from './scenario-index.mjs';
 import { loadScenarios, publishedPool } from './scenario-bank.mjs';
+import { recordGraduation, masteryReport } from './mastery.mjs';
 import { runMigrations } from './migrations.mjs';
 import { createAuditLog, mayRecordVerified } from './security.mjs';
 import { lessons, publicLessons, correctIndex } from './curriculum.mjs';
@@ -375,6 +376,12 @@ export function createTradingService(db, options = {}) {
         return send({ displayName: session.display_name });
       }
       if (route === '/progress' && req.method === 'GET') return send(getProgress(session.id));
+      if (route === '/mastery' && req.method === 'GET') {
+        const progress = getProgress(session.id);
+        // Backfill for learners who finished before graduation was recorded.
+        if (recordGraduation(progress, lessons, clock())) db.prepare('INSERT INTO trading_learning VALUES(?,?) ON CONFLICT(session_id) DO UPDATE SET value=excluded.value').run(session.id, JSON.stringify(progress));
+        return send(masteryReport(progress, lessons));
+      }
       if (route === '/journal' && req.method === 'GET') return send({ trades: [
         ...paperTrades(session.id),
         ...db.prepare('SELECT value FROM trading_daily_results WHERE session_id=?').all(session.id).map(row => jsonParse(row.value)),
@@ -391,9 +398,10 @@ export function createTradingService(db, options = {}) {
         progress.answers[id].push(answer); progress.attempts++; if (correct) progress.correct++;
         const completed = progress.answers[id].length === lesson.questions.length;
         if (completed && !progress.completed.includes(id)) progress.completed.push(id);
+        const graduatedNow = completed && recordGraduation(progress, lessons, clock());
         const day = utcDay(clock()); if (!progress.days.includes(day)) progress.days.push(day);
         db.prepare('INSERT INTO trading_learning VALUES(?,?) ON CONFLICT(session_id) DO UPDATE SET value=excluded.value').run(session.id, JSON.stringify(progress));
-        return send({ correct, answer: expected, completed, progress, explanation: `The correct answer is: ${lesson.questions[question][1]}. ${lesson.slides[Math.min(2, Math.floor(question / 4))][1]}` });
+        return send({ correct, answer: expected, completed, graduatedNow, progress, explanation: `The correct answer is: ${lesson.questions[question][1]}. ${lesson.slides[Math.min(2, Math.floor(question / 4))][1]}` });
       }
       if (route === '/challenge' && req.method === 'GET') {
         const { future, ...challenge } = await getChallenge();
