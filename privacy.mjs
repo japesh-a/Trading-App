@@ -38,6 +38,7 @@ export function eraseAccount(db, accountId) {
     db.prepare('DELETE FROM account_logins WHERE account_id=?').run(accountId);
     db.prepare('DELETE FROM account_google_identities WHERE account_id=?').run(accountId);
     db.prepare('DELETE FROM account_privacy WHERE account_id=?').run(accountId);
+    db.prepare('DELETE FROM scenario_assignments WHERE account_id=?').run(accountId);
     db.prepare('UPDATE audit_log SET account_id=NULL WHERE account_id=?').run(accountId);
     db.prepare('DELETE FROM accounts WHERE id=?').run(accountId);
     db.exec('COMMIT');
@@ -93,6 +94,7 @@ export function exportAccount(db, session, now) {
     dailyResults: rows('trading_daily_results'),
     paperTrades: rows('trading_paper_trades'),
     openPaperPosition: rows('trading_paper_positions'),
+    scenarioAssignments: db.prepare('SELECT day,difficulty FROM scenario_assignments WHERE account_id=? ORDER BY day').all(session.account_id),
     note: 'Passwords, session tokens and security logs are not included.',
   };
 }

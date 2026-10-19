@@ -1,6 +1,8 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createAccountService, googleClientIdProblem, passwordSignupEnabled } from './auth-service.mjs';
 import { handlePrivacy, aiAllowed } from './privacy.mjs';
+import { allocateScenario, assignmentView } from './scenario-allocation.mjs';
+import { loadScenarios, publishedPool } from './scenario-bank.mjs';
 import { runMigrations } from './migrations.mjs';
 import { createAuditLog, mayRecordVerified } from './security.mjs';
 import { lessons, publicLessons, correctIndex } from './curriculum.mjs';
@@ -53,6 +55,7 @@ export function createTradingService(db, options = {}) {
   const clock = options.clock ?? Date.now;
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const allowedOrigins = new Set(String(env.WICKLUME_ALLOWED_ORIGIN || 'https://japesh-a.github.io').split(',').map(value => value.trim()).filter(Boolean));
+  const scenarioPool = options.scenarioPool ?? (async () => { const { scenarios, reviews } = await loadScenarios(); return publishedPool(scenarios, reviews); });
   const rates = new Map(), locks = new Map(), challengeRequests = new Map(), quoteCache = new Map(), marketCache = new Map(), chartCache = new Map();
   const rateLimit = (key, maximum, windowMs = 60000) => {
     const now = clock();
@@ -330,6 +333,15 @@ export function createTradingService(db, options = {}) {
       if (route.startsWith('/privacy')) {
         const reply = (value, status) => { if (value?.deleted) accounts.clearCookie(res); return send(value, status); };
         if (await handlePrivacy({ db, route, req, session, send: reply, fail, requestBody, clock })) return true;
+      }
+      if (route === '/scenario/today' && req.method === 'GET') {
+        if (!session.account_id) fail(401, 'Sign in to receive your daily scenario. Guests cannot save an assignment.');
+        const pool = await scenarioPool();
+        const assignment = allocateScenario({ db, accountId: session.account_id, day: utcDay(clock()), pool, now: clock() });
+        if (!assignment) fail(503, 'No reviewed scenarios are published yet.');
+        const scenario = pool.find(s => s.id === assignment.scenario_id && s.version === assignment.scenario_version);
+        if (!scenario) fail(503, 'Your assigned scenario is no longer available.');
+        return send(assignmentView(assignment, scenario));
       }
       if (route === '/lessons' && req.method === 'GET') return send(publicLessons());
       if (route === '/profile' && req.method === 'POST') {
