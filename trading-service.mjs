@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createAccountService, googleClientIdProblem, passwordSignupEnabled } from './auth-service.mjs';
 import { handlePrivacy, aiAllowed } from './privacy.mjs';
 import { allocateScenario, assignmentView } from './scenario-allocation.mjs';
+import { availableTimeframes } from './scenario-index.mjs';
 import { loadScenarios, publishedPool } from './scenario-bank.mjs';
 import { runMigrations } from './migrations.mjs';
 import { createAuditLog, mayRecordVerified } from './security.mjs';
@@ -341,7 +342,9 @@ export function createTradingService(db, options = {}) {
         if (!assignment) fail(503, 'No reviewed scenarios are published yet.');
         const scenario = pool.find(s => s.id === assignment.scenario_id && s.version === assignment.scenario_version);
         if (!scenario) fail(503, 'Your assigned scenario is no longer available.');
-        return send(assignmentView(assignment, scenario));
+        const tf = url.searchParams.get('timeframe') || undefined;
+        if (tf && !availableTimeframes(scenario).includes(tf)) fail(400, 'Timeframe not available for this challenge.');
+        return send(assignmentView(assignment, scenario, tf));
       }
       if (route === '/lessons' && req.method === 'GET') return send(publicLessons());
       if (route === '/profile' && req.method === 'POST') {

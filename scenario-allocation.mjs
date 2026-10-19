@@ -4,6 +4,7 @@
 // random token, not the internal scenario id.
 import { randomBytes, randomInt } from 'node:crypto';
 import { publicView } from './scenario-bank.mjs';
+import { indexedChartView, availableTimeframes } from './scenario-index.mjs';
 
 export const RECENT_DAYS = 14;
 
@@ -49,9 +50,9 @@ export function allocateScenario({ db, accountId, day, pool, now = Date.now(), r
 }
 
 // What the client receives: the pre-decision view under the opaque id. No family or provenance.
-export function assignmentView(assignment, scenario) {
-  const { id, version, ...rest } = publicView(scenario);
-  return { assignmentId: assignment.public_id, day: assignment.day, ...rest };
+export function assignmentView(assignment, scenario, timeframe) {
+  const { id, version, bars, timeframe: _tf, decisionBoundary, ...rest } = publicView(scenario);
+  return { assignmentId: assignment.public_id, day: assignment.day, ...rest, chart: indexedChartView(scenario, timeframe), timeframes: availableTimeframes(scenario) };
 }
 
 export function findAssignedScenario(db, accountId, publicId, pool) {
