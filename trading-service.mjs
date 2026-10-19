@@ -12,6 +12,7 @@ import { recordActivity, streakReport } from './streak.mjs';
 import { noTradeStatus, saveReflection } from './no-trade.mjs';
 import { createEntry, updateEntry, deleteEntry, listEntries, journalCsv } from './journal.mjs';
 import { PROMPTS, PROMPTS_VERSION, currentPlaybook, savePlaybook, buildCheck, recordCheck, findCheck } from './playbook.mjs';
+import { handleAdmin, scenarioSources, fileReport, myReports, supportAccessView, createGrant, revokeGrants } from './admin.mjs';
 import { runMigrations } from './migrations.mjs';
 import { createAuditLog, mayRecordVerified } from './security.mjs';
 import { lessons, publicLessons, correctIndex } from './curriculum.mjs';
@@ -65,7 +66,12 @@ export function createTradingService(db, options = {}) {
   const clock = options.clock ?? Date.now;
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const allowedOrigins = new Set(String(env.WICKLUME_ALLOWED_ORIGIN || 'https://japesh-a.github.io').split(',').map(value => value.trim()).filter(Boolean));
-  const scenarioPool = options.scenarioPool ?? (async () => { const { scenarios, reviews } = await loadScenarios(); return publishedPool(scenarios, reviews); });
+  // Admin state (F23: DB reviews, pinned publications, retirements) is layered over the reviewed content files.
+  // Tests may inject a fixed pool, which is then also the lookup for earlier assignments.
+  let sources = null;
+  const adminSources = () => sources ??= scenarioSources(db, clock, options.scenarioLoader ?? loadScenarios);
+  const scenarioPool = options.scenarioPool ?? (() => adminSources().pool());
+  const scenarioLookup = options.scenarioPool ?? (() => adminSources().lookup());
   const rates = new Map(), locks = new Map(), challengeRequests = new Map(), quoteCache = new Map(), marketCache = new Map(), chartCache = new Map();
   const rateLimit = (key, maximum, windowMs = 60000) => {
     const now = clock();
@@ -337,6 +343,7 @@ export function createTradingService(db, options = {}) {
         db.prepare('INSERT INTO trading_sessions VALUES(?,?,?,?)').run(id, hash(token), name(body.displayName), clock());
         return send({ token, displayName: name(body.displayName), accountType: 'anonymous-device-session' }, 201);
       }
+      if (route.startsWith('/admin')) return await handleAdmin({ db, route, req, send, fail, requestBody, clock, env, ip, rateLimit, sources: adminSources(), questions: options.questionBank });
       const session = sessionFor(req);
       ctx.session = session;
       rateLimit(`session:${session.id}`, 180);
@@ -344,12 +351,26 @@ export function createTradingService(db, options = {}) {
         const reply = (value, status) => { if (value?.deleted) accounts.clearCookie(res); return send(value, status); };
         if (await handlePrivacy({ db, route, req, session, send: reply, fail, requestBody, clock })) return true;
       }
+      if (route === '/reports' && req.method === 'POST') {
+        rateLimit(`report:${session.id}`, 10, 3600000);
+        return send(fileReport(db, session, await requestBody(req), clock, fail), 201);
+      }
+      if (route === '/reports' && req.method === 'GET') {
+        if (!session.account_id) fail(401, 'Sign in to see your reports.');
+        return send({ reports: myReports(db, session.account_id) });
+      }
+      if (route === '/support-access' || route === '/support-access/revoke') {
+        if (!session.account_id) fail(401, 'Sign in to manage support access.');
+        if (route === '/support-access' && req.method === 'GET') return send(supportAccessView(db, session.account_id, clock()));
+        if (route === '/support-access' && req.method === 'POST') { rateLimit(`grant:${session.account_id}`, 5, 3600000); return send(createGrant(db, session.account_id, clock), 201); }
+        if (req.method === 'POST') return send({ revoked: revokeGrants(db, session.account_id) });
+      }
       if (route === '/scenario/today' && req.method === 'GET') {
         if (!session.account_id) fail(401, 'Sign in to receive your daily scenario. Guests cannot save an assignment.');
         const pool = await scenarioPool();
         const assignment = allocateScenario({ db, accountId: session.account_id, day: utcDay(clock()), pool, now: clock() });
         if (!assignment) fail(503, 'No reviewed scenarios are published yet.');
-        const scenario = pool.find(s => s.id === assignment.scenario_id && s.version === assignment.scenario_version);
+        const scenario = (await scenarioLookup()).find(s => s.id === assignment.scenario_id && s.version === assignment.scenario_version);
         if (!scenario) fail(503, 'Your assigned scenario is no longer available.');
         const tf = url.searchParams.get('timeframe') || undefined;
         if (tf && !availableTimeframes(scenario).includes(tf)) fail(400, 'Timeframe not available for this challenge.');
@@ -359,7 +380,7 @@ export function createTradingService(db, options = {}) {
         if (!session.account_id) fail(401, 'Sign in to commit your daily decision.');
         rateLimit(`scenario-commit:${session.account_id}`, 30);
         const body = await requestBody(req);
-        const found = findAssignedScenario(db, session.account_id, body.assignmentId, await scenarioPool());
+        const found = findAssignedScenario(db, session.account_id, body.assignmentId, await scenarioLookup());
         if (!found) fail(404, 'That challenge is not assigned to you.');
         const { attempt, created, conflict } = commitAttempt({ db, assignment: found.assignment, scenario: found.scenario, body, playbookCheck: body.playbook === undefined ? null : buildCheck(db, session.account_id, body.playbook), now: clock() });
         if (conflict) return send({ error: 'Your decision is already locked in. Here is what you committed.', locked: true, ...replayView(attempt, found.scenario) }, 409);
@@ -374,7 +395,7 @@ export function createTradingService(db, options = {}) {
         const body = await requestBody(req);
         const attempt = findAttempt(db, session.account_id, body.assignmentId);
         if (!attempt) fail(404, 'Commit your decision before reflecting on it.');
-        const found = findAssignedScenario(db, session.account_id, body.assignmentId, await scenarioPool());
+        const found = findAssignedScenario(db, session.account_id, body.assignmentId, await scenarioLookup());
         if (!found) fail(503, 'This scenario version is no longer available.');
         const { created } = saveReflection(db, session.account_id, attempt, found.scenario, body.reflection, clock());
         // Streak credit is for the same UTC day as the challenge; a late reflection is saved but does not rewrite past days.
@@ -387,7 +408,7 @@ export function createTradingService(db, options = {}) {
         const assignmentId = url.searchParams.get('assignmentId');
         const attempt = findAttempt(db, session.account_id, assignmentId);
         if (!attempt) fail(404, 'Commit your decision to see the outcome.');
-        const found = findAssignedScenario(db, session.account_id, assignmentId, await scenarioPool());
+        const found = findAssignedScenario(db, session.account_id, assignmentId, await scenarioLookup());
         if (!found) fail(503, 'This scenario version is no longer available to replay.');
         return send({ ...replayView(attempt, found.scenario), noTrade: noTradeStatus(db, session.account_id, attempt, found.scenario) });
       }
