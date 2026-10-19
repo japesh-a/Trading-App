@@ -8,11 +8,28 @@ const digest = value => createHash('sha256').update(value).digest('hex');
 const lifetime = 7 * 86400000;
 const cookieName = 'wicklume_account';
 
+// Google web client ids look like <number>-<hash>.apps.googleusercontent.com. Returns a
+// reason string when the value cannot be one, or '' when it is acceptable (or unset).
+export function googleClientIdProblem(value) {
+  const id = String(value || '').trim();
+  if (!id) return '';
+  if (/\s/.test(id)) return 'it contains whitespace.';
+  if (!/^[A-Za-z0-9._-]+\.apps\.googleusercontent\.com$/.test(id)) return 'it must end in .apps.googleusercontent.com (use the OAuth client ID, never the client secret).';
+  return '';
+}
+
+// Password registration can be closed for a Google-only pilot. Existing password accounts still sign in.
+export const passwordSignupEnabled = env => String(env.WICKLUME_PASSWORD_SIGNUP ?? 'true').toLowerCase() !== 'false';
+
 // Account cookies never expose credentials to JavaScript. Anonymous bearer
 // sessions remain separate, so registering cannot claim another user's data.
 export function createAccountService(db, { env, clock, fail, requestBody, rateLimit, googleVerifier }) {
   runMigrations(db);
-  const googleClientId = String(env.GOOGLE_CLIENT_ID || '').trim();
+  const configuredClientId = String(env.GOOGLE_CLIENT_ID || '').trim();
+  // A malformed id would only produce confusing Google errors, so treat it as "not configured".
+  const googleClientId = googleClientIdProblem(configuredClientId) ? '' : configuredClientId;
+  if (configuredClientId && !googleClientId) console.warn(`GOOGLE_CLIENT_ID ignored: ${googleClientIdProblem(configuredClientId)}`);
+  const passwordSignup = passwordSignupEnabled(env);
   const googleClient = googleClientId ? new OAuth2Client(googleClientId) : null;
   const verifyGoogle = googleVerifier || (async credential => (await googleClient.verifyIdToken({ idToken: credential, audience: googleClientId })).getPayload());
   const secure = env.WICKLUME_COOKIE_SECURE === 'true' || (env.NODE_ENV === 'production' && env.WICKLUME_COOKIE_SECURE !== 'false');
@@ -53,6 +70,14 @@ export function createAccountService(db, { env, clock, fail, requestBody, rateLi
         if (token) db.prepare('DELETE FROM account_logins WHERE token_hash=?').run(digest(token));
         res.setHeader('Set-Cookie', cookie('', 0));
         return send({ account: null });
+      }
+      if (route === '/auth/logout-all' && req.method === 'POST') {
+        const account = resolve(req);
+        if (!account) fail(401, 'Sign in before signing out of other devices.');
+        await requestBody(req);
+        db.prepare('DELETE FROM account_logins WHERE account_id=?').run(account.account_id);
+        res.setHeader('Set-Cookie', cookie('', 0));
+        return send({ account: null, message: 'Signed out on every device.' });
       }
       if (route === '/auth/google' && req.method === 'POST') {
         if (!googleClientId) fail(503, 'Google sign in is not configured.');
@@ -121,6 +146,7 @@ export function createAccountService(db, { env, clock, fail, requestBody, rateLi
         return send({ account: publicAccount(identity), message: 'Password changed. Other devices have been signed out.' });
       }
       if (!['/auth/register', '/auth/login'].includes(route) || req.method !== 'POST') return send({ error: 'Account endpoint not found.' }, 404);
+      if (route === '/auth/register' && !passwordSignup) fail(403, 'New accounts are created with Google sign in. Email sign up is closed.');
       rateLimit(`auth-ip:${ip}`, 12, 15 * 60000);
       const body = await requestBody(req);
       const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';

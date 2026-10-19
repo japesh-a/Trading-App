@@ -46,7 +46,8 @@ Flags are environment variables. When absent, the feature is off and a local fal
 
 | Flag | Enables | Fallback |
 | --- | --- | --- |
-| `GOOGLE_CLIENT_ID` | Google sign-in button | Email/password only |
+| `GOOGLE_CLIENT_ID` | Google sign-in button (malformed ids are ignored with a warning) | Email/password only |
+| `WICKLUME_PASSWORD_SIGNUP` | Set `false` for a Google-only pilot: `/auth/register` returns 403; `/auth/logout-all` signs out every device | Email sign up open |
 | `TWELVE_DATA_API_KEY` | Real US500, gold and GBP/USD quotes | Synthetic training feed |
 | `OPENAI_API_KEY` + `OPENAI_MODEL` | AI trade review | No AI review |
 | `WICKLUME_ALLOWED_ORIGIN` and cookie settings | Cross-site API use | Same-origin only |

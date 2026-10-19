@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { createAccountService } from './auth-service.mjs';
+import { createAccountService, googleClientIdProblem, passwordSignupEnabled } from './auth-service.mjs';
 import { runMigrations } from './migrations.mjs';
 import { createAuditLog, mayRecordVerified } from './security.mjs';
 import { lessons, publicLessons, correctIndex } from './curriculum.mjs';
@@ -305,7 +305,9 @@ export function createTradingService(db, options = {}) {
         dailyRanked: true, paperRanked: true, lessonGateVerified: false, paperTradingOpen: true,
         coach: Boolean(env.OPENAI_API_KEY && env.OPENAI_MODEL),
         markets: { BTC: true, US500: Boolean(env.TWELVE_DATA_API_KEY), XAUUSD: Boolean(env.TWELVE_DATA_API_KEY), GBPUSD: Boolean(env.TWELVE_DATA_API_KEY) },
-        accountType: 'email-google-and-guest', accounts: true, verifiedRequiresAccount: env.WICKLUME_ANONYMOUS_VERIFIED !== 'true', googleClientId: env.GOOGLE_CLIENT_ID || '', initialBalance: INITIAL_BALANCE,
+        accountType: 'email-google-and-guest', accounts: true, verifiedRequiresAccount: env.WICKLUME_ANONYMOUS_VERIFIED !== 'true', googleClientId: googleClientIdProblem(env.GOOGLE_CLIENT_ID) ? '' : String(env.GOOGLE_CLIENT_ID || '').trim(), passwordSignup: passwordSignupEnabled(env),
+        // A verified Google email says nothing about the learner's age; eligibility is a separate step.
+        googleVerifiesAge: false, initialBalance: INITIAL_BALANCE,
         dailyRiskLimit: 100, execution: 'Educational simulation; no spread, fees, financing or margin. Stops may slip; candles use stop-first execution.',
         paperExecution: 'Quote polling with completed-candle reconciliation. Partial entry minutes and provider-history gaps cannot be reconstructed exactly.',
       });

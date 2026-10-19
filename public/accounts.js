@@ -32,7 +32,7 @@ export async function initializeAccounts() {
   const dialog = document.getElementById('account-dialog');
   const content = document.getElementById('account-content');
   const config = await serviceConfig();
-  let account = null, mode = 'login', available = Boolean(config.apiBase), statusMessage = '', googleClientId = '';
+  let account = null, mode = 'login', available = Boolean(config.apiBase), statusMessage = '', googleClientId = '', passwordSignup = true;
   const call = async (path, body) => {
     const response = await fetch(config.apiBase + '/api/trading/auth/' + path, {
       method: body ? 'POST' : 'GET', credentials: 'include',
@@ -48,7 +48,7 @@ export async function initializeAccounts() {
     catch (error) { statusMessage = error.message; }
     try {
       const response = await fetch(config.apiBase + '/api/trading/config', { credentials: 'include', signal: AbortSignal.timeout(15000) });
-      if (response.ok) googleClientId = String((await response.json()).googleClientId || '');
+      if (response.ok) { const settings = await response.json(); googleClientId = String(settings.googleClientId || ''); passwordSignup = settings.passwordSignup !== false; }
     } catch { /* Email sign in remains available when config cannot be read. */ }
   }
   setAccountScope(account?.id);
@@ -110,7 +110,7 @@ export async function initializeAccounts() {
         <label>Confirm new password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label>
         <p class="muted">Use at least 12 characters. Changing your password signs out your other devices.</p><button class="btn" type="submit">Update password</button><p role="alert" class="error-message" id="password-error"></p></form></details>`}
         ${googleClientId && !account.googleLinked ? '<div class="google-account"><p>Link Google to sign in without a password next time.</p><div id="google-signin"></div></div>' : account.googleLinked ? '<p>Google sign in is linked to this account.</p>' : ''}
-        <button class="btn" id="sign-out">Sign out</button><p class="error-message" role="alert" id="account-error"></p>`;
+        <button class="btn" id="sign-out">Sign out</button> <button class="link" id="sign-out-all">Sign out on every device</button><p class="error-message" role="alert" id="account-error"></p>`;
       content.querySelector('#account-email').textContent = `Signed in as ${account.email}`;
       content.querySelector('[name="displayName"]').value = account.displayName;
       content.querySelector('#profile-form').onsubmit = async event => {
@@ -136,8 +136,14 @@ export async function initializeAccounts() {
         try { await call('logout', {}); reload(); }
         catch (error) { content.querySelector('#account-error').textContent = error.message; event.target.disabled = false; }
       };
+      content.querySelector('#sign-out-all').onclick = async event => {
+        event.target.disabled = true;
+        try { await call('logout-all', {}); reload(); }
+        catch (error) { content.querySelector('#account-error').textContent = error.message; event.target.disabled = false; }
+      };
       return;
     }
+    if (!passwordSignup) mode = 'login';
     const register = mode === 'register';
     content.innerHTML = `<p>${register ? 'Create an account to keep your learning progress and verified trades across devices.' : 'Welcome back. Sign in to your learning and paper trading account.'}</p>
       ${googleClientId ? '<div class="google-account"><div id="google-signin"></div><p>Or use your email and password below.</p></div>' : ''}
@@ -148,11 +154,11 @@ export async function initializeAccounts() {
       <p class="muted">${register ? 'Use at least 12 characters. Guest progress stays separate from your new account.' : 'Password reset is not available yet. Keep your password somewhere safe.'}</p>
       <p class="error-message" id="account-error" role="alert"></p>
       <button class="btn primary full" type="submit">${register ? 'Create account' : 'Sign in'}</button></form>
-      <button class="link account-switch" id="account-switch">${register ? 'Already have an account? Sign in' : 'New here? Create an account'}</button>
+      ${passwordSignup ? `<button class="link account-switch" id="account-switch">${register ? 'Already have an account? Sign in' : 'New here? Create an account'}</button>` : '<p class="muted">New here? Use Google sign in above to create your account.</p>'}
       <button class="link" id="guest-continue">Continue as a guest</button>`;
     content.querySelector('#account-error').textContent = statusMessage;
     showGoogle();
-    content.querySelector('#account-switch').onclick = () => { mode = register ? 'login' : 'register'; statusMessage = ''; render(); };
+    if (passwordSignup) content.querySelector('#account-switch').onclick = () => { mode = register ? 'login' : 'register'; statusMessage = ''; render(); };
     content.querySelector('#guest-continue').onclick = async () => {
       try { await call('logout', {}); reload(); }
       catch (error) { content.querySelector('#account-error').textContent = error.message; }
