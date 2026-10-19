@@ -6,6 +6,7 @@ import { commitAttempt, findAttempt, replayView } from './scenario-attempt.mjs';
 import { availableTimeframes } from './scenario-index.mjs';
 import { loadScenarios, publishedPool } from './scenario-bank.mjs';
 import { recordGraduation, masteryReport } from './mastery.mjs';
+import { revisionSuggestions, revisionThreshold, checkPractice } from './revision.mjs';
 import { runMigrations } from './migrations.mjs';
 import { createAuditLog, mayRecordVerified } from './security.mjs';
 import { lessons, publicLessons, correctIndex } from './curriculum.mjs';
@@ -381,6 +382,16 @@ export function createTradingService(db, options = {}) {
         // Backfill for learners who finished before graduation was recorded.
         if (recordGraduation(progress, lessons, clock())) db.prepare('INSERT INTO trading_learning VALUES(?,?) ON CONFLICT(session_id) DO UPDATE SET value=excluded.value').run(session.id, JSON.stringify(progress));
         return send(masteryReport(progress, lessons));
+      }
+      if (route === '/revision' && req.method === 'GET') {
+        const lesson = url.searchParams.get('lesson');
+        const topic = lesson === null ? undefined : { lesson, section: url.searchParams.get('section') ?? 0 };
+        return send(revisionSuggestions(getProgress(session.id), lessons, { threshold: revisionThreshold(env), topic }));
+      }
+      if (route === '/revision/check' && req.method === 'POST') {
+        const body = await requestBody(req);
+        if (!Number.isInteger(body.lesson) || body.lesson < 0 || body.lesson >= lessons.length || !Number.isInteger(body.question) || body.question < 0 || body.question >= lessons[body.lesson].questions.length || !Number.isInteger(body.answer) || body.answer < 0 || body.answer > 2) fail(400, 'Invalid practice answer.');
+        return send(checkPractice(lessons, body.lesson, body.question, body.answer));
       }
       if (route === '/journal' && req.method === 'GET') return send({ trades: [
         ...paperTrades(session.id),
